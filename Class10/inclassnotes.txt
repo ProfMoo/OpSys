@@ -1,0 +1,64 @@
+[10/10/2017]
+
+SYNCHRONIZATION
+
+-- synchronization problems are inherent to parallel programming (e.g., threads, multiple 
+	processes via fork()/pipe()/etc.)
+
+					SHARED MEMORY
+					+-----------+
+					| global x  | <==== initially, x is 5
+					+-----------+
+
+			PROCESS P1									PROCESS P2
+		+----------------+							+----------------+
+		|				 |						 	| 				 |
+		|	local y		 |						 	|	local z      |		SYNCHRONIZATION PROBLEMS:
+		|				 |						 	| 				 |		
+		|				 |							|				 |		when you get to end of code...
+		|----------------|						 	|----------------|		x: 10
+		>	x += 4		 <		CRITICAL			> 	x++			 <		y: 9 or 10
+		>	y = x		 <		SECTION		 		> 	z = x		 <		z: 6 or 10
+		|				 |						 	| 				 |
+		|	print x		 |						 	| 	print x		 |		(what is the exact output?)
+		|	print y		 |						 	| 	print z	  	 |
+		|				 |							| 	 			 |
+		|	<point A>	 |							| 	<point B>	 |
+		+----------------+							+----------------+		... depends on how these 
+																			statements interleave with
+																			one another ...
+-- The 'highlighted' blocks of code above are called CRITICAL SECTIONS.
+	This means that we can't be context switched in the middle of this.
+
+-- A critical section guarantees MUTUAL EXCUSION among multiple processes (or threads)
+	for access to one or more resources. (e.g., global/shared variables x)
+
+-- Critical sections protect against more than one process being in its critical
+	section at any time.
+
+-- To synchronize process (or threads), first identify the critical section of code.
+	-- If some given process P is executing in its critical section, then no other processes
+		can be executing in their critical sections.
+	-- If some given thread T is executing in its critical section, then no other thread
+		can be executing in their critical sections.
+
+-- The OS must control access to critical sections (and/or provide us
+	some mechanisms to do so in code)
+
+-- See diagram above ... more synchronization problems at the assembly level.
+
+-- When the program counters (PCs) gets to <point A> in P1 and <point B> in P2,
+	x is most likely 10, but it could be 9 or 6.
+
+	P1:
+	x += 4 ===========> x = x + 4
+						LOAD x		; load the value of x into a register
+						ADD #4		; add 4 to that register (...9)
+				<---context-switch----------------->
+						STORE x		; save the new value (9) back
+
+	P2:
+	x++ ==============> x = x +1
+						LOAD x		; load the value of x into a register (5)
+						INCR		; add 1 to that register (...6)
+						STORE x		; save the new value (6) back
