@@ -1,0 +1,24 @@
+[10/12/17]
+
+Homework 2
+
+Project 1 due Tuesday
+
+Homework 3 (coming soon) multi-threaded
+
+Exams back on Monday
+
+============================================
+
+(SumV1.java example)
+
+-- If we want to add all numbers from 1-1,000,000... a good way to do this
+is multi-threading. We can make ten threads and give them each 100,000 numbers to add.
+	-- In this case, we need to identify critical sections. Having a bunch of threads 
+	modifying the same sum is going to prove dangerous.
+
+============================================
+
+Why join a thread back in?
+-- We might want to return information from child to parent.
+-- We might want to ensure a certain sequence of events (blocking...).
