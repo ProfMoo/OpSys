@@ -1,0 +1,65 @@
+[10/23/17]
+
+===========================================
+
+SEMAPHORE
+
+-- an OS construct that enables us to have synchronized acces to one or more shared resources
+
+-- special non-negative int variable
+
+-- two operations:
+	-- first operation essentially attempts to gain access
+		P()			proberen (to try)
+		wait()		
+		down()
+
+	--second operation relinquishes the access that we gained via P() or wait() or down()
+		V()			vrygeren (to release)
+		signal()
+		up()
+
+-- pseudocode:
+	-- semaphore S is non-negative int variable
+		(INVARIANT: S >= 0)
+
+	P(semaphore S) 			/*this P() operation MUST execute*/
+	{						/*without any interruption, i.e., be atomic*/
+		while ( S == 0 )
+		{
+			/*busy wait*/
+		}
+		S--;
+	}
+
+	V(semaphore S)
+	{
+		S++;
+	}
+
+	INVARIANT: S = S  +  #V - #P
+					0
+
+			#V is the number of V() operations called on S
+			#P is the number of P() operations called on S
+
+=====================================
+--example of a BINARY SEMAPHORE, which guarantees mutual exclusion
+
+	/*initialize to 1 since there is exactly one resource/lock*/
+	semaphore mutex = 1;
+
+	/*each process (or thread) executes the code below:*/
+	...
+	P(mutex);
+	executeCriticalSection();
+	V(mutex);
+	...
+
+-- a COUNTING (or GENERAL) SEMAPHORE controls access to a finite number of resources
+
+	-- initialize semaphore to n, where n is the number of resources to be shared/synchronized
+
+	-- use P() and V() operations
+
+	-- possible values of the semaphore are 0, 1, 2, ..., n
