@@ -1,0 +1,263 @@
+[10/26/2017]
+
+Homework 3 due 11/2 instead of 10/31
+
+Threads allow us to write applications that use system resources more efficiently
+and take advantage of multiple processors
+
+POSIX threads (Pthreads)
+-- standard for multi-threaded model user/supported on Linux systems
+-- set of APIs
+-- gcc -Wall main.c -pthread
+
+Asynchronicity implies multiple operatoins that can be executed independently
+from one another (and therefore parallelizable), at time requiring synchronization
+
+Key challenges of asynchronicity:
+-- synchronization (usually, some sequences need to occur in order)
+
+Synchronization:
+(1) data synchronization
+(2) process/thread synchronization -- sequence of events
+
+======================================================================================
+
+Homework 3:
+You do not have to use semaphores (i.e., semget(), etc). 
+Also, do not use signals.
+
+Use pthread mutex variables
+
+Could also explore/use pthread_cond_t
+
+Possible approach: use a global/shared structure to maintain status information about each thread.
+Shared structure would contain each information about each thread
+
++---+----------------+----------
+|tid|     state      |
++---+----------------+----------
+|123|    RUNNING     |
++---+----------------+----------
+|456|    RUNNING     |
++---+----------------+----------
+|246|    RUNNING     |
++---+----------------+----------
+
+e.g., thread 246 is done reading all the words; exiting....
+
+	...thread 246 changes its state to TERMINATED
+
+	main thread checks this structure and calls pthread_join() on thread without blocking
+
+before thread creation:
+
+int next_index = 0;
+mutex index_mutex = 1; //pseudocode is 0
+mutex buffer_full_mutex = 0; 
+
+child threads:
+P(index_mutex) //only one child will get in here at a time ----- mutex_lock()
+	get next free index (e.g., index 0) 
+	increment next_index  (e.g., to 1) 
+	if buffer full, V(buffer_full_mutex) //increment this when the buffer is full
+V(index_mutex) //mutex_unlock()
+
+main/parent thread:
+P(buffer_full_mutex)
+	write words to the output file
+	reset next_index to 0
+
+Replace the Ps and Vs with mutex_lock() and mutex_unlock()
+
+===================================================================================
+
+q3.c output:
+
+	<main>
+	0 unlucky 7
+
+	<child-thread1>
+	0 lucky 7
+	-- or --
+	0 lucky 13
+
+	<child-thread2>
+	0 lucky 7
+
+	<the above three lines of output could be interleaves>
+
+q4.c output: 
+
+	<main1>
+	first thread is <tid1>
+
+	<thread1>
+	b 4 good <val1> u
+
+	<main2>
+	second thread is <tid2>
+
+	<thread2>
+	b 4 good <val2> u
+
+	in general, lines interleave, except for:
+		<main1> is always output <main2>
+		<thread2> output line must be after <main1>
+
+	---
+
+	<val1> could be 2 or 4
+	<val2> could be 2 or 4
+	<val1> and <val2> both can't be 4.
+
+	---
+
+	extra: final result of x could be 4 or 8. it's usually 8, but if
+		both threads load in x at same time (and both get 2), the final
+		result could be 4.
+
+===================================================================================
+
+A system enters a deadlock state when multiple processes (or threads) are unable to obtain 
+a lock on all necessary resources and therefore unable to make any progress in their execution
+
+After acquiring a resource, a process/thread holds on to that resource indefinitely
+
+ex:
+						semaphore S, Q
+
+		//thread 1								/thread 2
+		...										...
+		P(S) (succeeds)							P(Q) (succeeds)
+		P(Q) (blocked)							P(S) (blocked)
+		...										...
+		V(Q)									V(S)
+		V(S)									V(Q)
+		...										...
+
+
+Deadlock requires four conditions:
+-- mutual exclusion
+-- hold and wait
+-- no preemption (no way to have a thread come in and preempt for resources)
+-- circular wait --i.e., a cycle in resource allocation graph
+
+Handling deadlocks:
+-- Allow the system to enter a deadlock state, then recover:
+	-- terminating one or more of the deadlocked processes/threads
+	-- rolling back one or more of the deadlocked processes/threads
+		to a non-deadlocked state (safe checkpointed state)
+
+-- Another approach is to guarantee that the system will never
+	enter a deadlocked state:
+	--Preventing deadlock ensures that at least one of the four
+		required conditions is never met
+	--Deadlock avoidance allows a system to change state by allocating resources
+		only when it is certain that deadlock will not occur as a result (i.e., do
+		not create a cycle in the resource allocation graph)
+
+=======================================================================================
+
+Dining Philosophers Problem
+-- the classic synchronization/deadlock problem
+
+GIVEN: five philosophers that engage in only two activites
+	-- thinking (i.e., independent computation)
+	-- eating (i.e, requires synchronization to use a shared resource)
+
+philosopher( i )	/*i in 0...4 */
+{
+	while(1)
+	{
+		think()
+		eat()
+	}
+}
+
+GIVEN: shared communal table with five bowls and five chopsticks and a bowl of spaghetti
+	in the middle (that is endlessly replenished)
+
+To eat(), a philosopher must obtain two chopsticks (one from right, one from left)
+
+GOALS: 
+	-- Design a solution by which you can ensure/guarantee that a philosopher
+	eats; in order to eat, two chopsticks must be in hand.
+	-- No two philosophers can hold the same chopsticks simultaneously.
+	-- No deadlock
+	-- No individual starvation
+	-- Fairness, efficiency, etc.
+
+Deadlock: no process/thread can make any further progress (i.e., all blocked on P() operations)
+
+First attempt:
+	chopstick is array[5] of semaphores
+
+	philosopher( i )	/*i in 0...4 */
+	{
+		while(1)
+		{
+			think()
+			P( chopstick[i] );			<==== bad
+			P( chopstick[(i+1)%5] );
+			eat()	/* critical section */
+			V( chopstick[i] );
+			V( chopstick[(i+1)%5] );
+		}
+	}
+
+deadlock can occur if the first P() operation is executed by each philosopher, followed immediately by a context switch
+	-- no philosopher gets to the second P() operation
+	-- no philosopher gets to their V() operations
+
+====================================================================================
+
+A solution to this deadlock problem:
+	-- could use top-level mutex to avoid deadlock
+
+	chopstick is array[5] of semaphores
+
+	philosopher( i )	/*i in 0...4 */
+	{
+		while(1)
+		{
+			think()
+			P (mutex);
+				P( chopstick[i] );			<==== bad
+				P( chopstick[(i+1)%5] );
+			V (mutex);
+			eat()	/* critical section */
+			V( chopstick[i] );
+			V( chopstick[(i+1)%5] );
+		}
+	}
+
+Another solution:
+	-- could use asymmetric approach to avoid deadlock:
+
+	chopstick is array[5] of semaphores
+
+	philosopher( i )	/*i in 0...3 */
+	{
+		while(1)
+		{
+			think()
+			P( chopstick[i] );
+			P( chopstick[(i+1)%5] );
+			eat()	/* critical section */
+			V( chopstick[i] );
+			V( chopstick[(i+1)%5] );
+		}
+	}
+
+	philosopher( 4 )
+	{
+		while(1)
+		{
+			think()
+			P( chopstick[(i+1)%5] ); /*SWAP ORDER OF P() OPERATIONS */
+			P( chopstick[i] );			
+			eat()	/* critical section */
+			V( chopstick[i] );
+			V( chopstick[(i+1)%5] );
+		}
+	}

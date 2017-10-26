@@ -33,7 +33,7 @@ void* alarm_thread_function( void* arg ) /* void* is just a placeholder, could b
 	/* pthread_detach() enables pthreads to reclaim the thread
 		resources when this thread terminated
 		i.e., do not leave a "zombie thread" behind*/
-	int rc = pthread_detach(mytid);
+	int rc = pthread_detach(mytid); //No need to call join!
 	/*TO DO: check rc for error from pthread_detach()*/
 
 	printf( "Alarm set for %d seconds\n", alarm->seconds);
