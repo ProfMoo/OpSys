@@ -26,7 +26,7 @@ public class SharedBuffer
   }
 
 
-  public void produceMessage( long threadId )
+  public synchronized void produceMessage( long threadId )
   {
     if ( buffer.size() < maxSize )
     {
@@ -49,7 +49,7 @@ public class SharedBuffer
   }
 
 
-  public void consumeMessage( long threadId )
+  public synchronized void consumeMessage( long threadId )
   {
     if ( buffer.size() > 0 )
     {
@@ -63,10 +63,12 @@ public class SharedBuffer
   public void doit()
   {
     Producer p1 = new Producer();
+    Producer p2 = new Producer();
     Consumer c1 = new Consumer();
     Consumer c2 = new Consumer();
     Consumer c3 = new Consumer();
     p1.start();
+    p2.start();
     c1.start();
     c2.start();
     c3.start();
@@ -79,3 +81,4 @@ public class SharedBuffer
     program.doit();
   }
 }
+
