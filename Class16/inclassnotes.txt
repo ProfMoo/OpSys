@@ -101,3 +101,10 @@ Sockets-based communication
 	80 HTTP
 	443 HTTPS
 	(check them out at /etc/services)
+
+UDP SERVER example (udp-server.c):
+-- socket()				--- create a socket (endpoint for communication)
+-- bind()				--- bind to (assign) a specific port number (or let
+						the OS assign a port number for us)
+-- getsockname()		--- get socket name (IP address), port number, etc.
+-- recvfrom()/sendto()	--- receive/send datagrams
