@@ -1,0 +1,29 @@
+[11/06/17]
+
+TCP server:
+socket()		create the server-side socket
+bind()			bind (associate) a specific port number with the socket
+listen()		identify the socket as a TCP listener, meaning it will be ready to accept() incoming
+				client connection requests
+
+accept()		accept an incoming client connection
+
+recv()/send()	read/write data across the socket connection
+read()/write()
+
+close() 		close the socket descriptor (i.e., the connection)
+
+
+
+TCP client:
+socket()		create the server-side socket
+connect()		attempt to establish a connection to the specified server and port number via TCP
+
+recv()/send()	read/write data across the socket connection
+read()/write()
+
+close()			close the socket descriptor (i.e., the connection)
+
+
+
+SERVER TYPES:

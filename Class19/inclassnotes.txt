@@ -1,0 +1,134 @@
+[11/20/2017]
+
+Exam 2
+-- average: 71
+-- grade grievances no later than Monday 11/27
+
+Homework 4
+
+=============================================================
+
+QUESTION 1(a)
+
+	[-1pt for each extra line of output]
+	[2pts for each line of output (for a total of 12pts)]
+
+													<main line1>
+													888 -8 8
+
+	<first thread>			<second thread>			<main line2>
+	900 rumor 08			901 rumor 00			888 0 8
+
+							<third thread>			<main line3>
+							902 shazam -88			888 0 8
+
+	[1pt] <main line1> must be displayed first
+
+	[1pts] The three main lines must be displayed in relative 
+	order <main line1>, <main line2>, <mainlin3>
+
+	[2pts] <main line2> must be displayed before <third thread>
+
+	[2pts] All other lines may be interleaved
+
+QUESTION 1(b) --everyone gets 2pts (lmao)
+
+	[2pts] From (a), <first thread> could sometimes be: 900 rumor 012
+
+	[1pt] If so, then if <main line3> follows, it must be: 888 0 12
+
+	[2pts] From (a), <main line3> could sometimes be: 888 0 12
+
+	[1pt] If so, then if <first thread> follows, it must be: 900 rumor 012
+
+		The <third thread> changes to: 902 shazam 88
+
+====================================================================================
+
+QUESTION 2(a)
+
+						<main line1>
+						[1pt] 888 -3
+
+		<first thread>						<second thread>
+[1pt] 	900 4 <x1>					[1pt]	901 4 <num2>
+
+						<main line2>
+				[1pt]	888 opsys
+
+						<main line3>
+				[1pt]	888 <x3>
+
+
+[1pt] <main line1> must be displayed first
+[1pt] <main line2> must be displayed after <first thread>
+[1pt] <main line3> must be displayed after <second thread>
+[1pt] All other lines may be interleaved
+[1pt] <x1> or <x2> must be -3 (i.e., at least one of these must be -3)
+[1pt] ...the other value could be -3 or -9
+[2pts] If only one of <x1> or <x2> is -3, then that line is displayed first
+[2pts] <x3> is either -9 or -27
+
+QUESTION 2(b)
+--check my exam for answer
+
+=====================================================================================
+
+QUESTION 3(a)
+
+	[1pt] the following two lines could be interleaved
+	
+				<first thread>				<second thread>
+		[2pts]	900: co5			[2pts]	901: co15
+
+				<main>
+		[2pts]	888: a15 <-- [1pt] must be last line
+
+QUESTION 3(b)
+
+	[4pts] 888: pu
+	[4pts] 888: ffs
+
+QUESTION 3(c)
+
+		<main>
+	[1pt] 	888: pu
+
+	[1pt the following two lines could be interleaved]
+
+	<first thread>				<second thread>
+	[2pts]	900: co3			[2pts]	901: co
+
+		<main>
+	[1pt]	888: a9
+	[1pt] 	888: ffs
+
+=======================================================================================
+
+QUESTION 4(a)
+
+	[1pt]		UDP server at port number 8998
+	[0.5pts]	Blocked on recvfrom()
+	[1pt]		Rcvd datagram from 128.113.126.39
+	[1pt]		RCVD 5 bytes
+	[1pt]		RCVD: "ABCD
+				"
+	[0.5pts]	Blocked on recvfrom()
+	[0.5pts]	Rcvd datagram from 128.113.126.39
+	[1pt]		RCVD 7 bytes
+	[1pt]		RCVD: "ABCDEFG"
+	[0.5pts]	Blocked on recvfrom()
+ 
+QUESTION 4(b)
+
+	[2pts] No
+
+=======================================================================================
+
+COPY IN FROM NOTES FOR QUESTION 5
+
+=======================================================================================
+
+EXTRA CREDIT
+
+	[1pt] Cocoa Puffs

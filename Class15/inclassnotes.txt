@@ -222,7 +222,7 @@ A solution to this deadlock problem:
 		{
 			think()
 			P (mutex);
-				P( chopstick[i] );			<==== bad
+				P( chopstick[i] );		
 				P( chopstick[(i+1)%5] );
 			V (mutex);
 			eat()	/* critical section */

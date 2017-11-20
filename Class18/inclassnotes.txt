@@ -16,11 +16,14 @@ tcP-server-fork.c example
 		|				|					|				|
 PARENT:	|		 sd 3>======8123 accept()	|				|
 		|				|					|				|
-CHILD:	|	 new sd 4>======54321==========41234===<		|
+CHILD:	|	 new sd 4>======8123===========41234===<		|
 		|				|					|				|
-CHILD:	|	 new sd 4>======43333==========11223===<		|
+CHILD:	|	 new sd 4>======8123===========11223===<		|
 		|				|					|				|
 		+---------------+					+---------------+
+
+	Things needed for a connection:
+	server IP, server port, client IP, client port, protocol (TCP)
 
 	It initially connects to 8123, then hands it off to a new port.
 	It does this so that 8123 remains as a listener
