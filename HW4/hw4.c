@@ -23,6 +23,97 @@
 
 #define BUFFER_SIZE 1024
 
+void* put(char* message) {
+	return NULL;
+}
+
+void* get(char* message) {
+	return NULL;
+}
+
+void* list(char* message) {
+	return NULL;
+}
+
+char* wordGet(int* i, char* message) {
+	char* singleWord = (char*)calloc(80, sizeof(char));
+	int j = 0;
+	for(; *i < strlen(message); (*i)++) {
+		// printf("i: %d\n", *i);
+		if (isalpha(message[(*i)]) || isdigit(message[(*i)])) { //begin word
+			j = 0;
+			singleWord[0] = message[(*i)];
+			while(1) { //reading a word
+				j += 1;
+				if(isalpha(message[(*i)+j])) {
+					singleWord[j] = message[(*i)+j]; 
+				}
+				else if(isdigit(message[(*i)+j])) {
+					singleWord[j] = message[(*i)+j]; 
+				}
+				else {
+					break;
+				}
+			}
+		}
+		else {
+			continue;
+		}
+		(*i) += j;
+		return(singleWord);
+	}
+	return NULL;
+}
+
+void* handleMessage(char* message) {
+	int counter = 0;
+	if (message[0] == 'P') {
+		//PUT <filename> <bytes>\n<file-contents>
+		char* put = (char*)calloc(80, sizeof(char));
+		char* filenamePut = (char*)calloc(80, sizeof(char));
+		char* bytes = (char*)calloc(80, sizeof(char));
+		char* fileContents = (char*)calloc(80, sizeof(char));
+		put = wordGet(&counter, message);
+		filenamePut = wordGet(&counter, message);
+		bytes = wordGet(&counter, message);
+		fileContents = wordGet(&counter, message);
+
+		printf("words: %s, %s, %s, %s\n", put, filenamePut, bytes, fileContents);
+		//free in here
+
+	}
+	else if (message[0] == 'G') {
+		//GET <filename> <byte-offset> <length>\n
+		char* get = (char*)calloc(80, sizeof(char));
+		char* filenameGet = (char*)calloc(80, sizeof(char));
+		char* byteOffset = (char*)calloc(80, sizeof(char));
+		char* length = (char*)calloc(80, sizeof(char));
+		get = wordGet(&counter, message);
+		filenameGet = wordGet(&counter, message);
+		byteOffset = wordGet(&counter, message);
+		length = wordGet(&counter, message);
+
+		printf("words: %s, %s, %s, %s\n", get, filenameGet, byteOffset, length);
+		//free in here
+	}
+	else if (message[0] == 'L') {
+		//LIST\n
+		char* list = (char*)calloc(80, sizeof(char));
+		list = wordGet(&counter, message);
+
+		printf("words: %s\n", list);
+		//free in here
+	}
+	else if (message[0] == 'E') {
+		_exit(0);
+	}
+	else {
+		perror("bad message, son");
+		_exit(0);
+	}
+	return NULL;
+}
+
 void* threadCall(void* arg) {
     int newsd = *((int *) arg);	
 
@@ -40,25 +131,22 @@ void* threadCall(void* arg) {
 		or the client closed the socket (n == 0) */
 		n = recv( newsd, buffer, BUFFER_SIZE, 0 );
 
-		if ( n == -1 )
-		{
+		if ( n == -1 ) {
 			perror( "recv() failed" );
 			_exit(1);
 		}
-		else if ( n == 0 )
-		{
+		else if ( n == 0 ) {
 			printf( "CHILD %d: Rcvd 0 from recv(); closing socket...\n", getpid() );
 		}
-		else /* n > 0 */
-		{
+		else {
 			buffer[n] = '\0';    /* assume this is text data */
-			printf( "CHILD %d: Rcvd message from %s: %s\n", getpid(), inet_ntoa( (struct in_addr)client.sin_addr ), buffer );
+			printf( "CHILD %d: Rcvd message from %s: Sending to function \"%s\"\n", getpid(), inet_ntoa( (struct in_addr)client.sin_addr ), buffer );
+			handleMessage(buffer);
 
 			/* send ACK message back to the client */
 			n = send( newsd, "ACK\n", 4, 0 );
 
-			if ( n != 4 )
-			{
+			if ( n != 4 ) {
 				perror( "send() failed" );
 				_exit(1);
 			}
@@ -95,8 +183,7 @@ int startConnection() {
 	server.sin_port = htons( port );
 	int len = sizeof( server );
 
-	if ( bind( sd, (struct sockaddr *)&server, len ) == -1 )
-	{
+	if ( bind( sd, (struct sockaddr *)&server, len ) == -1 ) {
 		perror( "bind() failed" );
 		return EXIT_FAILURE;
 	}
@@ -105,8 +192,7 @@ int startConnection() {
 	/* the value 5 here means that the OS will
 	maintain a queue of at most 5
 	pending connections for the accept() call */
-	if ( listen( sd, 5 ) == -1 )
-	{
+	if ( listen( sd, 5 ) == -1 ) {
 		perror( "listen() failed" );
 		return EXIT_FAILURE;
 	}
