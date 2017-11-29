@@ -1,0 +1,87 @@
+[10/19/2017]
+
+Project 1 -- see signal-input.c example
+
+Synchronization and Mutual Exclusion
+
+	/* P1 */
+	while (1)
+	{
+		execNonCriticalSection();
+		execCriticalSection();
+	}
+
+	/* P2 */
+	while (1)
+	{
+		execNonCriticalSection();
+		execCriticalSection();
+	}
+
+Synchronization:
+[1] data synchronization (java example)
+[2] process/thread synchronization (sequence of instructions/events)
+
+==============================================================================
+
+/* P1 */								/* P2 */
+while(1)								while(1)
+{										{
+	execNonCriticalSection();				execNonCriticalSection();
+	while (lock == 1)						while (lock == 1)
+	{										{
+		/*busy wait*/							/*busy wait*/
+	}										}
+	--context-switch--
+	lock = 1;								lock = 1;
+	execCriticalSection();					execCriticalSection();
+	lock = 0;								lock = 0;
+}
+^^this is bad because...
+-- context switches could ruin this (look at where it is placed in example)
+-- busy wait bangs the system and isn't efficient
+
+=============================================================================
+
+The two-process solution below is Dekker's solution
+
+			/* global or shared */
+			int x = 5;
+			int needLockP1 = 0; /* 0 or 1 */
+			int needLockP2 = 0; /* 0 or 1 */
+			int turn = P1; /* P1 or P2 */
+
+/* P1 */								/* P2 */
+while(1)								while(1)
+{										{
+	execNonCriticalSection();				execNonCriticalSection();
+	needLockP1 = 1;							needLockP2 = 1;
+	turn = P2;								turn = P1;
+
+	while (turn == P2 && needLockP2)		while (turn == P1 && needLockP1 == 1)
+	{										{
+		/*busy wait*/							/*busy wait*/
+	}										}
+							
+	execCriticalSection();					execCriticalSection();
+	needLockP1 = 0;							needLockP1 = 0;
+}
+
+TODO: verify (convince yourself) that this works correctly. Only one process
+in its critical section at a time
+
+===========================================================================================
+
+MUTUAL EXCUSION amonst multiple processes/threads
+
+/*global mutex variable to synchronize child threads*/
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+pthread_mutex_lock( &mutex );
+critical_section(t);
+fpthread_mutex_unlock( &mutex );
+
+===========================================================================================
+
+Homework 3
+--have to parallelize as much as possible

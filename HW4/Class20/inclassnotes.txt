@@ -1,0 +1,126 @@
+[11/27/2017]
+
+Left: HW4, Project2
+
+Homework 4
+-- Your server must never shutdown
+
+-- check out chdir()
+
+-- assume filename is no more than 32 bytes
+
+-- Use netcat; do not use telnet (telnet adds a newline, which we do not want)
+
+-- be sure to handle zombie processes (if you're using fork())
+-- be sure to handle zombie threads 
+	-- i.e., use pthread_detach() and/or pthread_join()
+
+-- Use a loop to read the data in the various PUT/GET requests.
+	We do this because we dont want too much in buffer/memory. Split it up
+
+	char buffer[1024];
+
+	while (not done)
+	{
+		read up to 1024 bytes into buffer
+		write data to file
+	}
+	//we dont need to account for terminator because we arent assuming it is a string,
+	//it is just binary data
+
+	e.g.,
+	PACKET #1: "PUT xyz.txt 26\nABCDEFGHIJKLMNOPQRSTUVWXYZ"
+				(send "ACK\n" back to client)
+
+	e.g.,
+	PACKET #1: "PUT xyz.txt 26\n"
+	PACKET #2: "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+				(send "ACK\n" back to client)
+
+	e.g.,
+	PACKET #1: "PUT xyz.txt 26\n"
+	PACKET #2: "ABCD
+	PACKET #3: "EFGHIJKLMNOPQRSTUVWX
+	PACKET #4: "YZ"
+				(send "ACK\n" back to client)
+
+	e.g. (do this in chunks),
+	PACKET #1: "PUT abc.txt 12345\n"   //we know its exactly this many bytes
+	PACKET #2: "<data..............>"
+	PACKET #3: "<data..............>"
+		...
+	PACKET #n: "<data..............>"
+				(send "ACK\n" back to client)
+
+	e.g.,
+	PACKET #1: "PUT xyz.txt 26\n"
+	PACKET #2: "ABCDEFGHIJKLMNOPQRSTUVWXYZ"		//you can assume that each equest starts a new packet
+	PACKET #3: "LIST\n"
+	PACKET #4: "GET abc.txt 123 456\n"
+				(send "ACK\n" back to client)
+
+===========================================================================
+
+Project 2
+
+Non-contiguous Memory Allocation
+-- We avoid the need to defragment memory by using a non-contiguous approach
+
+-- Given process P, slice up the process into N equally sized pages
+   (where the last page might not use the entire page of logical memory)
+
+-- Next, we allocate each PAGE to a FRAME of physical memory
+    (i.e., frame size == page size)
+
+-- Key advantage is that we no longer need defragmentation!   :-)
+
+-- But.....we do need a way to map a logical address to a physical address
+
+   -- We implement this mapping using a PAGE TABLE -- overhead   :-(
+
+e.g., a 16-bit memory address with the high-order 4 bits representing
+       the page number p.....
+
+
+  for process P,
+  logical address:     0110101011110111  <== binary 16-bit memory address
+
+                           |
+  logical address:     0110|101011110111  <== binary 16-bit memory address
+                           |
+                        ^        ^
+                        |        |
+                        |        |
+                      page     page
+                     number   offset
+
+               ...do the lookup in the page table for page 0110 (6)
+                   for process P
+
+               e.g., assume page 6 maps to frame 13
+
+                        |        |
+                        |        |
+                        v        v
+                           |
+ physical address:     1101|101011110111  <== binary 16-bit memory address
+                           |
+                        ^        ^
+                        |        |
+                        |        |
+                     frame     page
+                     number   offset
+
+
+  At most, how many pages are there per process?
+
+        4
+       2  ==>  16 pages per process (at most)
+
+
+  What is the page size (and therefore frame size) in bytes?
+
+        12
+       2   ==>  4096 bytes
+
+  Invariant: page size == frame size

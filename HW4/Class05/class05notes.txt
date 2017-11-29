@@ -1,0 +1,176 @@
+[09/18/17]
+
+Processes have a variety of states:
+
+	RUNNING 		READY 					WAITING 
+	 STATE 			STATE 				     STATE
+
+	+-----+									+---------------+
+	|     |		 +--------------------		|				|
+	| CPU | <=== | P3 | P5 | P2 | etc..		| I/O Subsystem |
+	|     |	     +--------------------		|				|
+	+-----+									+---------------+
+
+	RUNNING STATE: process is actively using the CPU
+					(i.e., executing/running its instructions)
+
+	READY STATE: process is ready to use the CPU
+					(i.e., idly waiting in the Ready Queue)
+
+	WAITING STATE: process is waiting for I/O operation(s) to complete
+					(or waiting for something else to happen... )
+
+CPU Scheduling (a.k.a. short-term scheduling)
+
+-- A scheduling system enables one process to use the CPI while
+	other processes are waiting in the ready queue to use the CPU
+	(or some processes are waiting on I/O)
+
+-- The goals of CPU Scheduling are to make the most efficient use
+	of the CPU that we can and to minimize the turnaround and wait
+	times for each running process. We would also like to achieve some
+	level or fairness among all processes to the extent possible
+
+-- The job of the CPU scheduler is, when the CPU becomes idle, to select
+	the next process from the ready queue.
+
+-- CPU Scheduling Algorithms:
+
+	-- First Come, First Served (FCFS)
+
+	-- Shortest Job First (SJF)
+
+	-- Shortest Remaining Time (SRT)
+
+	-- Priority Scheduling 
+
+	-- Round Robin (RR)
+
+-- Preemption occurs when the currently running process is "kicked out"
+	of the CPU.
+
+	-- might be because of the newly arriving (more imp) process
+	
+	-- might be because of a time out (like in a RR algorithm)
+
+===============================================================
+
+fork-interleaving.c example:
+
+OUTPUT(most likely):
+Before fork()
+ After fork()
+PARENT: my child process has pid 3064
+PARENT: my pid is 3063
+PARENT: waiting for child to terminate... 
+ After fork()
+CHILD: happy birthday!
+CHILD: my pid is 3064
+PARENT: child 3064 terminated.. 
+...successfully with exit status 12
+
+OUTPUT(less likely):
+Before fork()
+ After fork()
+ After fork()
+PARENT: my child process has pid 3064
+PARENT: my pid is 3063
+PARENT: waiting for child to terminate... 
+CHILD: happy birthday!
+CHILD: my pid is 3064
+PARENT: child 3064 terminated.. 
+...successfully with exit status 12
+
+to show all possible outputs:
+
+				[PARENT or ORIGINAL PROCESS]
+						Before fork()
+				/						  \
+			   /				 		   \
+			  / 					        \
+[PARENT]										[CHILD]
+After fork()									After work()
+PARENT: my child process has pid 10302			CHILD: happy birthday!
+PARENT: my pid is 10301							CHILD: my pid is 10302
+PARENT: waiting...process to terminate...
+
+	<the above two sets of outputs can interleave with one another,
+	but the realtive orders of each are exactly as shown. This means
+	msgs from parent are always in that order, but child msgs could
+	be interleaved anywhere in there>
+
+			\                                /
+		     \                              / [CHILD PROCESS TERMINATES]
+		      \                            /
+       <after the wait() or waitpid() call in the PARENT>
+       PARENT: child 10302 terminated...
+       			... successfully with exit status 123
+
+=============================================================================
+
+fork() creates a new child process, copying the memory from the parent/calling
+process to the new child process; all memory is therefore separate between parent
+and child, including statically and dynamically allocated variables
+
+why might fork() fail?
+-- Not enough memory
+-- The cap/maximum number of processes is reached for the given process (RLIMIT_NPROC)
+
+What happens when a child process terminates?
+-- the child process becaomes a defunct/zombie process
+-- A signal (SIGCHILD) is sent to the parent process, (see: man 7 signal) though by default
+	this signal is ignored
+-- the zombie will remain until the parent calls wait() or waitpid()
+
+Orphan vs. Zombie?
+-- note that "zombie" is a defunct process that is not running;
+	it has terminated, but still exists in the process table and has its
+	return value/status to return to its parent
+-- an "orphan" process is a running process that has its parent process terminated...
+
+What happens if parent process terminates before the child process terminates?
+-- when the parent process terminates, all of its child processes
+	are inherited by a top-level process (pid 1)
+-- note that the child processes keep running; they have no idea that
+	the parent process terminated
+-- this top-level process kills all the zombies (this process catches 
+	the SIGCHILD and then immediately calls wait() or waitpid())
+
+=============================================================================
+
+Inter-Process Communication (IPC)
+
+To create a means of communicating between parent and child processes,
+check out the pipe.c example...
+
+Interleaving occurring in the pipe-with-fork.c example:
+
+Created pipe; p[0] is 3 and p[1] is 4
+PARENT: I'm about to block on read()
+CHILD: happy birthday to me!
+CHILD: Wrote 26 bytes to the pipe
+CHILD: Read 10 bytes: ABCDEFGHIJ
+PARENT: Read 10 bytes: KLMNOPQRST
+PARENT: Read 6 bytes: UVWXYZ
+
+vs. 
+
+Created pipe; p[0] is 3 and p[1] is 4
+PARENT: I'm about to block on read()
+CHILD: happy birthday to me!
+CHILD: Wrote 26 bytes to the pipe
+CHILD: Read 10 bytes: KLMNOPQRST
+PARENT: Read 10 bytes: ABCDEFGHIJ
+PARENT: Read 6 bytes: UVWXYZ
+
+vs. 
+
+Created pipe; p[0] is 3 and p[1] is 4
+PARENT: I'm about to block on read()
+CHILD: happy birthday to me!
+CHILD: Wrote 26 bytes to the pipe
+PARENT: Read 10 bytes: ABCDEFGHIJ
+CHILD: Read 10 bytes: KLMNOPQRST
+PARENT: Read 6 bytes: UVWXYZ
+
+What other types of interleaving could occur here?

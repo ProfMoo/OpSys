@@ -1,0 +1,314 @@
+[10/02/2017]
+
+Final Exam
+-- Wednesday 12/20 11:30AM-2:30PM
+
+Exam 1 is Thursday 10/5 during class
+-- see sample exam 1 on course website for 9/28
+-- approximately 2/3 of the exam will cover C systems programming
+-- the other 1/3 will cover CPU scheduling (algorithms)
+-- 4 or 5 multipart questions
+-- no calc, laptops, etc
+-- assume that output always goes to the terminal (unless otherwise noted)
+-- assume that all system calls succeed (unless otherwise noted)
+
+=====================================================================
+
+Quiz 2
+
+Q3:		<parent>				<child>
+		high 5					high 5
+		square 1				gimme 10
+		all done				all done
+
+		-- the above <parent> and <child> output lines interleave with one another
+
+		-- the output in <parent> and <child> sections must occur in the relative orders shown
+
+You have to be careful with buffers and processes. If you don't buffer a print, it could get copied when it doesn't look like it should.
+
+ex:
+printf("yooo");
+pid = fork();
+
+The "yooo" is copied into both buffers and prints twice.
+
+Difference between \n and fflush(NULL) is where you're printing. \n flushes unless goin to a txt file, in this case fflush(NULL) is needed. If it goes to terminal, they look the same. 
+
+========================================================================
+
+Sample Exam 1 Questions
+
+(1)
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+int main()
+{
+	int rc;
+	printf( "ONE\n" );
+	rc = fork();
+	printf( "TWO\n" );
+	if ( rc == 0 ) { printf( "THREE\n" ); }
+	if ( rc > 0 ) { printf( "FOUR\n" ); }
+	return EXIT_SUCCESS;
+}
+
+(1 - Answer)
+							ONE
+						/		  \	
+			<parent>					<child>
+			TWO							TWO
+			FOUR						THREE
+
+			-- the above <parent> and <child> output lines interleave with one another
+
+			-- the output in <parent> and <child> sections must occur 
+			in the relative orders shown
+
+(1b)
+What happens when we run this code with stdout redirected to output.txt?
+(1b-answer)
+
+			<parent>					<child>
+			ONE 						ONE
+			TWO							TWO
+			FOUR						THREE
+
+			<parent> has buffered: "ONE\nTWO\nFOUR\n"
+			<child> has buffered: "ONE\nTWO\nTHREE\n"
+
+			-- we could get no output at all because we never fflush(NULL)
+
+fflush(NULL) flushes all fds
+fflush(stdout) flushes just stdout
+
+(2)
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+int main()
+{
+	int x = 150;
+	printf( "PARENT: x is %d\n", x );
+	printf( "PARENT: forking...\n" );
+	pid_t pid = fork();
+	printf( "PARENT: forked...\n" );
+	if ( pid == 0 )
+	{
+		printf( "CHILD: happy birthday\n" );
+		x *= 2;
+		printf( "CHILD: %d\n", x );
+	}
+	else
+	{
+		wait( NULL );
+		printf( "PARENT: child completed\n" );
+		x *= 2;
+		printf( "PARENT: %d\n", x );
+	}
+	return EXIT_SUCCESS;
+}
+
+(2-Answer)
+				PARENT: x is 150
+				PARENT: forking...
+		<parent>				<child>
+		PARENT: forked...		PARENT: forked...
+								CHILD: happybirthday
+								CHILD: 300
+			|
+			| 
+			|
+		<after child process terminates>
+		PARENT: child completed
+		PARENT: 300
+
+		-- the above <parent> and <child> output lines interleave with one another
+
+		-- the output in <parent> and <child> sections must occur 
+		in the relative orders shown
+
+		-- the last two lines of the parent are always last
+
+(2b) How would this look without the wait call?
+(2b-answer)
+				PARENT: x is 150
+				PARENT: forking...
+		<parent>				<child>
+		PARENT: forked...		PARENT: forked...
+		PARENT: child completed CHILD: happybirthday
+		PARENT: 300				CHILD: 300
+
+		-- the above <parent> and <child> output lines interleave with one another
+
+		-- the output in <parent> and <child> sections must occur 
+		in the relative orders shown
+
+(3) 
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+int main()
+{
+	printf( "ONE\n" );
+	fprintf( stderr, "ERROR: ONE\n" );
+	int rc = close( 1 );
+	printf( "==> %d\n", rc );
+
+	printf( "TWO\n" );
+	fprintf( stderr, "ERROR: TWO\n" );
+	rc = close( 2 );
+	printf( "==> %d\n", rc );
+
+	printf( "THREE\n" );
+	fprintf( stderr, "ERROR: THREE\n" );
+	return EXIT_SUCCESS;
+}
+
+(3-answer)
+	TRY IT OUT
+
+(4)
+4.  Given  the  following  C  program,  what  is  the
+exactoutput?   Further,  what  is  theexact contents  of  the newfile.txt
+file?   If  multiple  outputs  are  possible,  succinctly  describe  all
+possibilities.  Assume that all system calls complete successfully.
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+int main()
+{
+	int fd;
+	close( 2 );
+
+	#if 0
+	close( 1 );  /* <== add this line later.... */
+	#endif
+
+	printf( "HI\n" );
+	fflush( stdout );
+
+	fd = open( "newfile.txt", O_WRONLY | O_CREAT | O_TRUNC, 0600 );
+
+	printf( "==> %d\n", fd );
+	printf( "WHAT?\n" );
+	fprintf( stderr, "ERROR\n" ); //only difference between fprintf and printf is specifying where 
+								  //you are writing
+
+	fflush(NULL); <== added by G in class
+
+	close( fd ); //does not automatically flush the buffer
+	
+	return EXIT_SUCCESS;
+}
+
+We get on terminal:
+HI
+==> 2
+WHAT?
+We get in newfile.txt:
+ERROR
+
+(4b)
+Uncomment those lines of code. Now what is the output?
+(4b-Answer)
+We get on terminal:
+We get in newfile.txt:
+==> 1
+WHAT?
+
+(5)
+Combo of stuff we have seen so far. 
+fprintf(stderr, "ERROR\n"); //always goes to what is at fd 2. fd 2 is NEVER BUFFERED.
+
+-- If a fd is closed, and you write to it. If buffers, but just doesn't go anywhere. Be
+careful, as if you open it later, it could show up if you didn't fflush(NULL) before.
+
+exe:
+
+int main() {
+	int fd;
+	close(1);
+
+	printf("HI\n");
+
+	fd = open("newfile.txt", O_WRONLY | O_CREAT | O_TRUNC, 0600 );
+
+	printf("BYE\n");
+
+	fflush(stdout);
+
+	close(fd);
+
+	return EXIT_SUCCESS;
+}
+
+output in newfile.txt:
+HI
+BYE
+
+^^^ this stuff only works for stdout, because stderr is NEVER BUFFERED.
+If stderr, output in newfile.txt is:
+BYE
+
+(6)
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+int main()
+{
+	int rc;
+	int p[2];
+
+	rc = pipe( p );
+	printf( "%d %d %d\n", getpid(), p[0], p[1] );
+
+	rc = fork();
+
+	if ( rc == 0 )
+	{
+		rc = write( p[1], "ABCDEFGHIJKLMNOPQRSTUVWXYZ", 26 );
+	}
+	if ( rc > 0 )
+	{
+		char buffer[40];
+		rc = read( p[0], buffer, 8 );
+		buffer[rc] = '\0';
+		printf( "%d %s\n", getpid(), buffer );
+	}
+
+	printf( "BYE\n" );
+	return EXIT_SUCCESS;
+}
+
+(6- answer)
+Watch for rc. Child goes into both if statements, so child reads from pipe
+
+					 168 3 4
+	  		 / 						\
+	<parent>						  <child>
+	168 <data1>						768 <data2>
+			\						/
+					BYE
+					BYE
+
+	-- the above <parent> and <child> output lines interleave with one another
+
+	-- the output in <parent> and <child> sections must occur 
+		in the relative orders shown
+
+	-- <data1> and <data2> are "ABCDEFGH" and "IJKLMNOP" (respectively)
+	or vice versa
+
+(10)
+Starvation - Blocked forever
+Indefinite Blocking - Blocked for so long, bad things happen
+
+(14)
+It could fail if it doesn't have enough memory. You can limit by making sure the same process/user
+isn't calling too many forks.

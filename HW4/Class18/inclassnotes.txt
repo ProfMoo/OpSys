@@ -1,0 +1,298 @@
+[11/16/17]
+
+Exam 2 will be handed back on Monday
+
+Homework 4 specifications will be posted soon
+-- TCP-UDP (?) server that must be fork-based of thread-based
+
+tcp-server.c example
+tcP-server-fork.c example
+
+
+		SERVER
+		(IP addr)							CLIENT
+		+---------------+					+---------------+
+		|				|					|				|
+		|				|					|				|
+PARENT:	|		 sd 3>======8123 accept()	|				|
+		|				|					|				|
+CHILD:	|	 new sd 4>======8123===========41234===<		|
+		|				|					|				|
+CHILD:	|	 new sd 4>======8123===========11223===<		|
+		|				|					|				|
+		+---------------+					+---------------+
+
+	Things needed for a connection:
+	server IP, server port, client IP, client port, protocol (TCP)
+
+	It initially connects to 8123, then hands it off to a new port.
+	It does this so that 8123 remains as a listener
+
+	Each uses sd4 because each child process has their own fd tables.
+
+	Localhost -> means we are staying on the same machine
+
+
+SERVER TYPES: 
+
+(0) Iterative Server (typically UDP): 
+-- (e.g., tcp-server.c, udp-server.c)
+-- receive a datagram, figure something out, maybe send another datagram back. done
+-- accept incoming UDP datagrams on a specific port number; or we accept and handle TCP connections one after the other
+
+	i.e., a single thread of processing client request
+
+(1) fork()-based server:
+-- (e.g., tcp-server-fork.c) 
+-- a child process created for each TCP client connection
+-- downsides: handle all zombie processes, fork() is expensive
+
+(2) fork()-based server with pre-forked processes:
+-- processes are made before hand, then ready to go when a connection comes in
+-- downside: fork() can't be used to hand out info (cuz it's called before), so we have to communicate some
+	other way. usually this is done in shared memory or pipes
+
+(3) thread-based server:
+-- a child thread for each TCP client connection
+
+(4) thread-based server with pre-spawned thread
+-- threads are made before hand, then ready to go when a connection comes in
+-- downside: requres coordination and synchronization among all threads
+
+(5) select()-based server:
+-- a single process (no multi-threading) using the select() system call that enables
+	the process to poll multiple descriptors to check for activity on any of them
+-- upsides: this approach eliminates the need (complexitiy/overhead) of multiple processes or multiple threads
+-- downsides: just one thread. so if it dies, we are in trouble
+
+
+MEMORY MANAGEMENT:
+
+Memory Manager:
+-- allocate/deacllocate memory for processes (not like calloc/malloc, this is for
+	putting a process in memory and then dealocating when it needs i.e., terminating)
+
+-- protection, i.e., no access to a given process's memory space from outside the given process
+
+-- shared memory management (between two or more processes)
+
+Approaches:
+-- Contiguous Memory Allocation
+-- Noncontiguous Memory Allocation (paging/segmentation)
+-- Virtual Memory
+
+With multiprogramming, multiple options for managing memory
+-- early approaches identified PARTITIONS, where a partition is a block of CONTIGUOUS 
+	memory that could be allocated to a process
+
+Degree of multiprogramming
+-- how many processes can be in memory at once
+-- depends on process sizes, partition sizes, and the amount of memory available overall
+
+A LOGICAL ADDRESS reference some location within a process address space
+-- think of the logical address as an offset from the first byte of the process memory
+
+		LOAD X
+LABEL:	...
+		...
+		...
+		DECR X
+		BNE LABEL		;branch up 48 bytes
+						^^ (relative to where we are at in code) 
+
+-- this relative addresses allows for relocatable code. 
+-- when a process is placed into physical memory, its logical address space is bound
+	to a physical address space
+
+The OS must map every LOGICAL ADDRESS to a PHYSICAL ADDRESS
+-- logical addresses are created by compilers/assemblers
+
+=============================================================================================
+
+CONTIGUOUS MEMORY ALLOCATION
+-- fit the entire process address space into physical memory in one contiguous block
+-- this block has a BASE address (a starting point in physical memory) and a
+	LIMIT (size in bytes, i.e., how much memory do we have for this process)
+-- Partitioned memory allocation can be FIXED or DYNAMIC
+
+Fixed Partitioning Scheme
+-- Given N partitions of potentially different sizes
+-- Each process is allocated to exactly one partition
+-- Each partition is associated with one process or it is marked as FREE
+-- OS manages a list of free partitions and a mapping of used partitions to process
+
+MEMORY (fixed partitioning scheme):
+ex is three partitions
+_________________________________________________________________ (Partition 1, 64 memory units) 
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...................................
+.................................................................
+_________________________________________________________________ (Partition 2, 64 memory units) 
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB.......
+.................................................................
+_________________________________________________________________ (Partition 3, 64 memory units) 
+CCCCCCCCC........................................................
+.................................................................
+_________________________________________________________________
+-- if process D arrives and requires 8 memory units, we cannot allocate this process to
+	memory even though the memory is available.
+
+MEMORY (dynamic partitioning scheme):
+_____________________________________________
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBB
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBHHHHHHH
+HHHHHHHHHHH..................................
+.........................DDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDDDDDDDDDDDDDDDEEEEEEEEEFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGG.....................
+_____________________________________________
+-- process C has already come and gone
+-- the problem is that we potentially get fragments of small memory that
+	we can't use. a process could come in needed 20, and there are 25 free,
+	but it isn't all in a group.
+
+MEMORY (dynamic after defragmentation):
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBB
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBHHHHHHH
+HHHHHHHHHHHDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDEEEEEEEEEFFFFFFFFFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFGGGGGGGGGGGGGGGGGGGGGGGGGG
+GGGGGGGGGG...................................
+.............................................
+_____________________________________________
+-- basically just groups all processes together.
+-- this is not without cost. we can't do much while we are defragmenting, and it takes time.
+
+===================================================================================
+Algorithms for placing a newly arrived process X into a dynamically allocated partition:
+
+Q: 
+X requires 5 memory units. use...
+FIRST-FIT ALGORITHM -- scan from the "top" of memory until we find a partition
+						that fits process x
+
+MEMORY (dynamic partitioning scheme):
+_____________________________________________
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBB
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBHHHHHHH
+HHHHHHHHHHH..................................
+.........................DDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDDDDDDDDDDDDDDDEEEEEEEEEFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGG.....................
+_____________________________________________
+
+A:
+MEMORY (dynamic partitioning scheme):
+_____________________________________________
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBB
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBHHHHHHH
+HHHHHHHHHHHXXXXX.............................
+.........................DDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDDDDDDDDDDDDDDDEEEEEEEEEFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGG.....................
+_____________________________________________
+
+
+Q:
+X requires 5 memory units. use...
+NEXT-FIT ALGORITHM -- scan from the end of the most recently allocated process until
+						we find a partition that fits process X
+last process placed was E.
+
+MEMORY (dynamic partitioning scheme):
+_____________________________________________
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBB
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBHHHHHHH
+HHHHHHHHHHH..................................
+.........................DDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDDDDDDDDDDDDDDDEEEEEEEEEFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGG.....................
+_____________________________________________
+
+A:
+MEMORY (dynamic partitioning scheme):
+_____________________________________________
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBB
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBHHHHHHH
+HHHHHHHHHHH..................................
+.........................DDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDDDDDDDDDDDDDDDEEEEEEEEEFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGGXXXXX................
+_____________________________________________
+-- idea is that we move through memory, allocating in one side. then, the other side
+	has time to clear up. not perfect, but not effective. uses spacial locality.
+
+
+Q:
+X requires 5 memory units. use...
+BEST-FIT ALGORITHM -- allocate process X to the smallest free 
+						partition that's big enough to fit process x
+
+MEMORY (dynamic partitioning scheme):
+_____________________________________________
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBB
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBHHHHHHH
+HHHHHHHHHHH....III...........................
+.........................DDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDDDDDDDDDDDDDDDEEEEEEEEEFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGG.....................
+_____________________________________________
+
+A:
+MEMORY (dynamic partitioning scheme):
+_____________________________________________
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBB
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBHHHHHHH
+HHHHHHHHHHH....IIIXXXXX......................
+.........................DDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDDDDDDDDDDDDDDDEEEEEEEEEFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGG.....................
+_____________________________________________
+--keeps the big areas free, but has a tendency to split up
+	the memory a lot. we end up with little tiny free partitions everywhere
+
+Q:
+X requires 5 memory units. use...
+WORST-FIT ALGORITHM -- allocate process X to the largest free 
+						partition that's big enough to fit process x
+
+MEMORY (dynamic partitioning scheme):
+_____________________________________________
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBB
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBHHHHHHH
+HHHHHHHHHHH....III...........................
+.........................DDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDDDDDDDDDDDDDDDEEEEEEEEEFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGG.....................
+_____________________________________________
+
+A:
+MEMORY (dynamic partitioning scheme):
+_____________________________________________
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBB
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBHHHHHHH
+HHHHHHHHHHH....IIIXXXXX.....................
+.........................DDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDDDDDDDDDDDDDDDEEEEEEEEEFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGG.....................
+_____________________________________________
+-- this looks like it is terrible, because it usually is.
+-- it avoids getting a bunch of small chunks of memory split up

@@ -23,93 +23,11 @@
 
 #define BUFFER_SIZE 1024
 
-void getFiles(char*** directory, int* numFiles) {
-	DIR* dir = opendir("storage");
-	struct dirent* file;
-
-	printf("tryna open\n");
-
-	if (dir == NULL) {
-		perror( "opendir() failed" );
-	}
-
-	int ret;
-	ret = chdir("storage");
-
-	if (ret == -1) {
-		perror( "chdir() failed" );
-	}
-
-	int i = 0;
-	while((file = readdir(dir)) != NULL) {
-		printf("i: %d\n", i);
-		struct stat buf;
-
-		int rc = lstat( file -> d_name, &buf );
-
-		if(rc == -1) {
-			perror("lstat() failed");
-		}
-
-		if (S_ISREG(buf.st_mode)) {
-			(*numFiles)++;
-
-			//adding to list of txt files here
-			if (i == 0) {
-				*directory = (char**)calloc(1, sizeof(char*));
-			}
-			else {
-				*directory = realloc(*directory, (i+1)*sizeof(char*));
-			}
-
-			(*directory)[i] = (char*)calloc(80 + 1, sizeof(char));
-			strncpy((*directory)[i], file->d_name, 80);
-
-			#if DEBUG_MODE
-				printf( " -- regular file \n" );
-				fflush(NULL);	
-			#endif
-			i += 1;
-		}
-		else if (S_ISDIR(buf.st_mode)) {
-			#if DEBUG_MODE
-				printf( " -- directory \n");
-				fflush(NULL);
-			#endif
-		}
-	}
-	closedir(dir);
-}
-
-void* put(char* filenamePut, char* bytes, char* fileContents) {
+void* put(char* message) {
 	return NULL;
 }
 
-void* get(char* filenameGet, char* byteOffset, char* length) {
-	int numFiles = 0;
-	char** directory;
-	getFiles(&directory, &numFiles);
-	printf("numFiles: %d\n", numFiles);
-	fflush(NULL);
-
-	int i = 0;
-	int validFile = 0;
-	while (i < numFiles) {
-		printf("names: %s:%s\n", filenameGet, directory[i]);
-		fflush(NULL);
-		if (!strcmp(filenameGet, directory[i])) {
-			validFile = 1;
-		}
-		i += 1;
-	}
-	if (validFile == 0) {
-		perror("Invalid filename");
-		_exit(1);
-	}
-	//chedk for valid filename, check for length zero. return error if needed
-	//check if file is 
-	//check for valid byte range (inside file)
-	//send info to client
+void* get(char* message) {
 	return NULL;
 }
 
@@ -133,9 +51,6 @@ char* wordGet(int* i, char* message) {
 				else if(isdigit(message[(*i)+j])) {
 					singleWord[j] = message[(*i)+j]; 
 				}
-				else if(message[(*i)+j] == '.') {
-					singleWord[j] = message[(*i)+j];
-				}
 				else {
 					break;
 				}
@@ -154,33 +69,31 @@ void* handleMessage(char* message) {
 	int counter = 0;
 	if (message[0] == 'P') {
 		//PUT <filename> <bytes>\n<file-contents>
-		char* putCommand = (char*)calloc(80, sizeof(char));
+		char* put = (char*)calloc(80, sizeof(char));
 		char* filenamePut = (char*)calloc(80, sizeof(char));
 		char* bytes = (char*)calloc(80, sizeof(char));
 		char* fileContents = (char*)calloc(80, sizeof(char));
-		putCommand = wordGet(&counter, message);
+		put = wordGet(&counter, message);
 		filenamePut = wordGet(&counter, message);
 		bytes = wordGet(&counter, message);
 		fileContents = wordGet(&counter, message);
 
-		printf("words: %s, %s, %s, %s\n", putCommand, filenamePut, bytes, fileContents);
-		put(filenamePut, bytes, fileContents);
+		printf("words: %s, %s, %s, %s\n", put, filenamePut, bytes, fileContents);
 		//free in here
 
 	}
 	else if (message[0] == 'G') {
 		//GET <filename> <byte-offset> <length>\n
-		char* getCommand = (char*)calloc(80, sizeof(char));
+		char* get = (char*)calloc(80, sizeof(char));
 		char* filenameGet = (char*)calloc(80, sizeof(char));
 		char* byteOffset = (char*)calloc(80, sizeof(char));
 		char* length = (char*)calloc(80, sizeof(char));
-		getCommand = wordGet(&counter, message);
+		get = wordGet(&counter, message);
 		filenameGet = wordGet(&counter, message);
 		byteOffset = wordGet(&counter, message);
 		length = wordGet(&counter, message);
 
-		printf("words: %s, %s, %s, %s\n", getCommand, filenameGet, byteOffset, length);
-		get(filenameGet, byteOffset, length);
+		printf("words: %s, %s, %s, %s\n", get, filenameGet, byteOffset, length);
 		//free in here
 	}
 	else if (message[0] == 'L') {
