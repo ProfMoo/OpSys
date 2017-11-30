@@ -1,0 +1,115 @@
+[11/30/17]
+
+Homework 4:
+Use lseek() to read in the file.
+lseek() gets right to the point, then loop to get the bytes
+
+=====================================================================
+
+Principle of Locality
+-- Much more often than not, when we're accessing memory on a given page P,
+	the next memory address we wish to access will also be on page P
+
+-- Through the use of a Translation Lookaside Buffer (TLB), as long as we have a high enough
+	TLB hit ratio, we can significantly reduce the overhead of using a page table
+
+e.g., each physical memory access requires 100ns and each TLB memory access (i.e., lookup)
+	requires 20ns
+
+Memory access without the use of a TLB:
+(1) page table memory access (100ns) plus
+(2) requested memory access (100ns)
+-- each memory access is therefore 200ns
+
+Memory access with the use of a TLB:
+(1) TLB memory access/lookup (20ns)
+	(2a) TLB cache miss --> page table memory access (100ns) plus
+							requested memory access (100ns)
+							cache the page-to-frame mapping in the TLB
+	(2b) TLB cache hit --> 	requested memory access (100ns)
+
+
+Effective Memory Access Time (EMAT)
+-- time it takes to get memory account for all possibilities
+-- e.g., given a TLB hit ratio of 96%
+
+EMAT = (0.96 * 120) + (0.04 * 220) = 124ns
+
+TO DO: recalculate EMAT with various TLB hit ratios. 99%, 50%, 75%, etc.
+
+----------------------------------------------------------
+
+Internal fragmentation is unused (wasted) memory in the last frame allocated for
+	a given process (because the page does not fit entirely in that frame)
+
+How do we determine what page size to use?
+-- the smaller the page size, the less internal fragmentation
+-- best case, internal fragmentation is zero
+-- worst case, internal fragmentation is K-1, where K is the page size
+
+-- the smaller page size, the larger number of pages required and therefore a larger
+	page table will be required
+	--and therefore, less advantages gained from the principle of locality and using a TLB
+
+==================================================================================
+
+Virtual Memory
+-- Not all pages of a process are needed during program execution
+-- Therefore, the physical address space is (much) smaller than the logical/virtual address space
+-- Virtual address space essentially exists on disk
+-- A PAGE FAULT results from a memory access that requires a page that is not already
+	in physical memoeyr and therefore needs to be read from disk (i.e., swapped in)
+-- All pages (primarily unused pages) of each process are stored out on disk
+
+Virtual Memory Policies:
+-- All three of these work together to make virtual memory work
+-- the FETCH policy governs when a page should be loaded into physical memory from disk 
+	(e.g., demand paging, demand paging with pre-paging that loads some of the adjacent
+	pages into physical memory)
+-- the PLACEMENT policy specifies where a page is loaded into physical memory (page table)
+-- the REPLACEMENT policy determines which existing page of a process (already in physical memory)
+	should be replaced when we swap in a page from disk
+	-- we use an algorithm to identify the VICTIM page
+
+Page allocation:
+-- in a STATIC ALLOCATION scheme, the number of frames allocated per process is fixed/static
+	(e.g., process A gets 3 frames, process B gets 4 frames, etc.)
+-- in a DYNAMIC ALLOCATION scheme, the number of frames allocated per process can vary 
+	(based on some criteria per process)
+-- in an EQUAL ALLOCATION scheme, all processes have an equal number of frames allocated
+	(e.g., each process gets exactly 5 frames)
+-- in a PROPORTIONAL ALLOCATION scheme, processes are allocated frames in proportion to process size,
+	priority, behavior (page use), etc.
+
+Page REPLACEMENT Algorithms:
+-- Algorithm for identifying which page already in physical memory (for the given process) will be
+	replaced by the newly requested page
+-- Goal is to minimize the number of page faults
+-- Goal is also to identify the locality of the given process at that given time (depending
+	on the phase of the program, startup, middle, ending, etc.)
+
+=====================================================================================
+
+e.g., page reference stream
+
+	1 2 3 2 1 1 3 4 4 2 4 5 7 2 2 8 3 2 2 1 1 ..........
+
+	given a 3-frame static memory allocation scheme for this process
+
+FIFO(first-in-first-out)
+
+	1 2 3 2 1 1 3 4 4 2 4 5 7 2 2 8 3 2 2 1 1 .......
+  ----------------------------------------------------------------------
+  . 1 1 1 1 1 1 1 4 4 4 4 4 4 2 2 2 2 2 2 1 1
+  . . 2 2 2 2 2 2 2 2 2 2 5 5 5 5 8 8 8 8 8 8
+  . . . 3 3 3 3 3 3 3 3 3 3 7 7 7 7 3 3 3 3 3
+  ----------------------------------------------------------------------
+  	p p p 		  p		  p p p   p p     p        <== page faults
+
+LRU(least-recently used)
+
+LFU(least-frequently used)
+
+OPT(optimal -- looking forward in time...)
+
+Working Set
