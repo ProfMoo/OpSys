@@ -9,107 +9,86 @@
 #include <ctype.h>
 #include <pthread.h>
 
-#include "hw4.h"
-
 #include <sys/types.h>
 #include <sys/socket.h>
-
 #include <netinet/in.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdlib.h>
 #include <arpa/inet.h>
 
+#include "hw4.h"
+
 #define BUFFER_SIZE 1024
-
-void getFiles(char*** directory, int* numFiles) {
-	DIR* dir = opendir("storage");
-	struct dirent* file;
-
-	printf("tryna open\n");
-
-	if (dir == NULL) {
-		perror( "opendir() failed" );
-	}
-
-	int ret;
-	ret = chdir("storage");
-
-	if (ret == -1) {
-		perror( "chdir() failed" );
-	}
-
-	int i = 0;
-	while((file = readdir(dir)) != NULL) {
-		printf("i: %d\n", i);
-		struct stat buf;
-
-		int rc = lstat( file -> d_name, &buf );
-
-		if(rc == -1) {
-			perror("lstat() failed");
-		}
-
-		if (S_ISREG(buf.st_mode)) {
-			(*numFiles)++;
-
-			//adding to list of txt files here
-			if (i == 0) {
-				*directory = (char**)calloc(1, sizeof(char*));
-			}
-			else {
-				*directory = realloc(*directory, (i+1)*sizeof(char*));
-			}
-
-			(*directory)[i] = (char*)calloc(80 + 1, sizeof(char));
-			strncpy((*directory)[i], file->d_name, 80);
-
-			#if DEBUG_MODE
-				printf( " -- regular file \n" );
-				fflush(NULL);	
-			#endif
-			i += 1;
-		}
-		else if (S_ISDIR(buf.st_mode)) {
-			#if DEBUG_MODE
-				printf( " -- directory \n");
-				fflush(NULL);
-			#endif
-		}
-	}
-	closedir(dir);
-}
 
 void* put(char* filenamePut, char* bytes, char* fileContents) {
 	return NULL;
 }
 
-void* get(char* filenameGet, char* byteOffset, char* length) {
-	int numFiles = 0;
-	char** directory;
-	getFiles(&directory, &numFiles);
-	printf("numFiles: %d\n", numFiles);
-	fflush(NULL);
-
-	int i = 0;
-	int validFile = 0;
-	while (i < numFiles) {
-		printf("names: %s:%s\n", filenameGet, directory[i]);
-		fflush(NULL);
-		if (!strcmp(filenameGet, directory[i])) {
-			validFile = 1;
-		}
-		i += 1;
-	}
-	if (validFile == 0) {
-		perror("Invalid filename");
+void* getErrorCheck(char* filename, char* byteOffset, char* length) {
+	//the user needs to enter digits
+	if (!isdigit(byteOffset[0])) {
+		perror("Byteoffset needs to be a number");
 		_exit(1);
 	}
-	//chedk for valid filename, check for length zero. return error if needed
-	//check if file is 
-	//check for valid byte range (inside file)
-	//send info to client
+	if (!isdigit(length[0])) {
+		perror("Length needs to be a number");
+		_exit(1);
+	}
+	//letting the user know of a bad filename and exits
+	if ( access(filename, F_OK) == -1 ) {
+		perror("File doesn't exist");
+		_exit(1);
+	}
+	return NULL;
+}
+
+void* get(char* filenameGet, char* byteOffset, char* length, int newsd) {
+	char filename[64];
+	strcpy(filename, "storage/");
+	strcat(filename, filenameGet);
+	//printf("filename: %s\n", filename);
+
+	getErrorCheck(filename, byteOffset, length);
+	int byteOffsetInt = (int)strtol(byteOffset, (char**)NULL, 10);
+	int lengthInt = (int)strtol(length, (char**)NULL, 10);
+
+	FILE *fileptr;
+	char *buffer;
+	long filelen;
+
+	fileptr = fopen(filename, "rb");	// Open the file in binary mode
+	fseek(fileptr, 0, SEEK_END);		// Jump to the end of the file
+	filelen = ftell(fileptr);			// Get the current byte offset in the file
+
+	//printf("filelen: %lu\n", filelen);
+
+	//convert byteoffset and length, add and see if longer than file
+	if (byteOffsetInt + lengthInt > filelen) {
+		perror("Trying to access outside of file");
+		_exit(1);
+	}
+
+	rewind(fileptr);					// Jump back to the beginning of the file
+
+	buffer = (char *)malloc((lengthInt+1)*sizeof(char)); // Enough memory for file + \0
+	
+	int fileFd = fileno(fileptr);
+	ssize_t numRead = pread(fileFd, buffer, lengthInt, byteOffsetInt);
+	printf("buffer: %s\n", buffer);
+	fflush(NULL);
+
+	if (numRead < 0) {
+		perror("Error, file not read. pread() failed");
+		_exit(1);
+	}
+	
+	int n = send( newsd, buffer, lengthInt, 0 );
+
+	if ( n != lengthInt ) {
+		perror( "send() failed" );
+		_exit(1);
+	}
+
+	fclose(fileptr); // Close the file
+
 	return NULL;
 }
 
@@ -150,7 +129,7 @@ char* wordGet(int* i, char* message) {
 	return NULL;
 }
 
-void* handleMessage(char* message) {
+void* handleMessage(char* message, int newsd) {
 	int counter = 0;
 	if (message[0] == 'P') {
 		//PUT <filename> <bytes>\n<file-contents>
@@ -165,8 +144,11 @@ void* handleMessage(char* message) {
 
 		printf("words: %s, %s, %s, %s\n", putCommand, filenamePut, bytes, fileContents);
 		put(filenamePut, bytes, fileContents);
-		//free in here
-
+		
+		free(putCommand);
+		free(filenamePut);
+		free(bytes);
+		free(fileContents);
 	}
 	else if (message[0] == 'G') {
 		//GET <filename> <byte-offset> <length>\n
@@ -180,8 +162,13 @@ void* handleMessage(char* message) {
 		length = wordGet(&counter, message);
 
 		printf("words: %s, %s, %s, %s\n", getCommand, filenameGet, byteOffset, length);
-		get(filenameGet, byteOffset, length);
-		//free in here
+		get(filenameGet, byteOffset, length, newsd);
+
+		free(getCommand);
+		free(filenameGet);
+		free(byteOffset);
+		free(length);
+		
 	}
 	else if (message[0] == 'L') {
 		//LIST\n
@@ -189,13 +176,16 @@ void* handleMessage(char* message) {
 		list = wordGet(&counter, message);
 
 		printf("words: %s\n", list);
-		//free in here
+		
+		free(list);
 	}
 	else if (message[0] == 'E') {
+
 		_exit(0);
 	}
 	else {
 		perror("bad message, son");
+
 		_exit(0);
 	}
 	return NULL;
@@ -228,7 +218,7 @@ void* threadCall(void* arg) {
 		else {
 			buffer[n] = '\0';    /* assume this is text data */
 			printf( "CHILD %d: Rcvd message from %s: Sending to function \"%s\"\n", getpid(), inet_ntoa( (struct in_addr)client.sin_addr ), buffer );
-			handleMessage(buffer);
+			handleMessage(buffer, newsd);
 
 			/* send ACK message back to the client */
 			n = send( newsd, "ACK\n", 4, 0 );
