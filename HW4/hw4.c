@@ -18,11 +18,49 @@
 
 #define BUFFER_SIZE 1024
 
-void* put(char* filenamePut, char* bytes, char* fileContents) {
+int putErrorCheck(int newsd, char* filename, char* bytes, char* fileContents) {
+	if ( access(filename, F_OK) == -1 ) {
+
+	}
+	else {
+		perror("ERROR FILE EXISTS\n");
+		int n = send( newsd, "ERROR FILE EXISTS\n", 18, 0 );
+		if ( n != 18 ) {
+			perror( "send() failed" );
+			_exit(1);
+		}
+		return 1;
+	}
+	return 0;
+}
+
+void* putSendAck(int newsd) {
+	char* toSend = (char*)calloc(4, sizeof(char));
+	strcat(toSend, "ACK");
+	toSend[3] = '\n';
+
+	int n = send( newsd, toSend, 4, 0 );
+
+	if (n != 4) {
+		perror("ERROR. ACK DIDNT SEND");
+		_exit(1);
+	}
+
+	printf("[child %lu] Sent ACK\n", pthread_self());
+	fflush(NULL);
+	free(toSend);
 	return NULL;
 }
 
-int getErrorCheck(char* filename, char* byteOffset, char* length) {
+void* put(int newsd, char* filenamePut, char* bytes, char* fileContents) {
+	//def.txt has 1139 bytes
+	putErrorCheck(newsd, filenamePut, bytes, fileContents);
+
+	putSendAck(newsd);
+	return NULL;
+}
+
+int getErrorCheck(int newsd, char* filename, char* byteOffset, char* length) {
 	//the user needs to enter digits
 	if (!isdigit(byteOffset[0])) {
 		perror("Byteoffset needs to be a number");
@@ -34,21 +72,48 @@ int getErrorCheck(char* filename, char* byteOffset, char* length) {
 	}
 	//letting the user know of a bad filename and exits
 	if ( access(filename, F_OK) == -1 ) {
-		perror("File doesn't exist");
+		printf("[child %lu] Sent ERROR NO SUCH FILE\n", pthread_self());
+		int n = send( newsd, "ERROR NO SUCH FILE\n", 19, 0 );
+		if ( n != 19 ) {
+			perror( "send() failed" );
+			_exit(1);
+		}
 		return 1;
 	}
 	return 0;
 }
 
-void* get(char* filenameGet, char* byteOffset, char* length, int newsd) {
+void* getSendAck(int newsd, char* length) {
+	int intLength = strlen(length);
+	char* toSend = (char*)calloc(5 + intLength, sizeof(char));
+	strcat(toSend, "ACK ");
+	strcat(toSend, length);
+	toSend[4+intLength] = '\n';
+
+	int n = send( newsd, toSend, 5 + intLength, 0 );
+
+	if (n != 5 + intLength) {
+		perror("ERROR. ACK DIDNT SEND");
+		_exit(1);
+	}
+
+	printf("[child %lu] Sent %s", pthread_self(), toSend);
+	fflush(NULL);
+	free(toSend);
+	return NULL;
+}
+
+void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 	char filename[64];
 	strcpy(filename, "storage/");
 	strcat(filename, filenameGet);
-	//printf("filename: %s\n", filename);
 
-	if (getErrorCheck(filename, byteOffset, length)) {
+	if (getErrorCheck(newsd, filename, byteOffset, length)) {
 		return NULL;
 	}
+
+	getSendAck(newsd, length);
+
 	int byteOffsetInt = (int)strtol(byteOffset, (char**)NULL, 10);
 	int lengthInt = (int)strtol(length, (char**)NULL, 10);
 
@@ -60,36 +125,41 @@ void* get(char* filenameGet, char* byteOffset, char* length, int newsd) {
 	fseek(fileptr, 0, SEEK_END);		// Jump to the end of the file
 	filelen = ftell(fileptr);			// Get the current byte offset in the file
 
-	//printf("filelen: %lu\n", filelen);
-
 	//convert byteoffset and length, add and see if longer than file
 	if (byteOffsetInt + lengthInt > filelen) {
-		perror("Trying to access outside of file");
-		_exit(1);
+		int n = send( newsd, "ERROR INVALID BYTE RANGE\n", 25, 0 );
+		if ( n != 25 ) {
+			perror( "send() failed" );
+			_exit(1);
+		}
+		return NULL;
 	}
 
 	rewind(fileptr);					// Jump back to the beginning of the file
 
-	buffer = (char *)malloc((lengthInt+1)*sizeof(char)); // Enough memory for file + \0
+	buffer = (char *)malloc((lengthInt+1)*sizeof(char));
 	
 	int fileFd = fileno(fileptr);
 	ssize_t numRead = pread(fileFd, buffer, lengthInt, byteOffsetInt);
-	//printf("buffer: %s\n", buffer);
-	fflush(NULL);
 
 	if (numRead < 0) {
 		perror("Error, file not read. pread() failed");
 		_exit(1);
 	}
 	
-	int n = send( newsd, buffer, lengthInt, 0 );
+	buffer[lengthInt] = '\n';
+	int n = send( newsd, buffer, lengthInt+1, 0 );
 
-	if ( n != lengthInt ) {
+	if ( n != lengthInt+1 ) {
 		perror( "send() failed" );
 		_exit(1);
 	}
 
+	printf("[child %lu] Sent %s bytes of \"%s\" from offset %s\n", pthread_self(), length, filenameGet, byteOffset);
+	fflush(NULL);
+
 	fclose(fileptr); // Close the file
+	free(buffer);
 
 	return NULL;
 }
@@ -156,6 +226,8 @@ void* list(int newsd) {
 		//_exit(1);
 	}
 
+	printf("[child %lu] Sent %s", pthread_self(), toSend);
+
 	chdir("..");
     closedir(d);
     return NULL;
@@ -208,7 +280,7 @@ void* handleMessage(char* message, int newsd) {
 		fileContents = wordGet(&counter, message);
 
 		printf("[child %lu] Received PUT %s %s\n", pthread_self(), filenamePut, fileContents);
-		put(filenamePut, bytes, fileContents);
+		put(newsd, filenamePut, bytes, fileContents);
 		
 		free(putCommand);
 		free(filenamePut);
@@ -227,7 +299,7 @@ void* handleMessage(char* message, int newsd) {
 		length = wordGet(&counter, message);
 
 		printf("[child %lu] Received GET %s %s %s\n", pthread_self(), filenameGet, byteOffset, length);
-		get(filenameGet, byteOffset, length, newsd);
+		get(newsd, filenameGet, byteOffset, length);
 
 		free(getCommand);
 		free(filenameGet);
@@ -274,14 +346,6 @@ void* threadCall(void* arg) {
 		else {
 			buffer[n] = '\0';    /* assume this is text data */
 			handleMessage(buffer, newsd);
-
-			/* send ACK message back to the client */
-			n = send( newsd, "ACK\n", 4, 0 );
-
-			if ( n != 4 ) {
-				perror( "send() failed" );
-				_exit(1);
-			}
 		}
 	}
 	while ( n > 0 );
@@ -289,7 +353,7 @@ void* threadCall(void* arg) {
     return NULL;
 }
 
-int startConnection() {
+int startConnection(char* portString) {
 	/* Create the listener socket as TCP socket */
 	int sd = socket( PF_INET, SOCK_STREAM, 0 );
 	/* here, the sd is a socket descriptor (part of the fd table) */
@@ -308,7 +372,9 @@ int startConnection() {
 	server.sin_family = PF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;  /* allow any IP address to connect */
 
-	unsigned short port = 8123;
+
+	unsigned short port = (unsigned short)strtol(portString, (char**)NULL, 10);
+	//unsigned short port = 8123;
 
 	/* htons() is host-to-network short for data marshalling */
 	/* Internet is big endian; Intel is little endian */
@@ -358,5 +424,10 @@ int startConnection() {
 int main(int argc, char* argv[]) {	
 	//check for correct input here
 
-	startConnection();
+	if (argc != 2) {
+		perror("USAGE BAD. CORRECT IS ./a.out <port-number>");
+		_exit(1);
+	}
+
+	startConnection(argv[1]);
 }
