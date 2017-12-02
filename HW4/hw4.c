@@ -14,7 +14,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include "hw4.h"
+//#include "hw4.h"
 
 #define BUFFER_SIZE 1024
 
@@ -22,22 +22,22 @@ void* put(char* filenamePut, char* bytes, char* fileContents) {
 	return NULL;
 }
 
-void* getErrorCheck(char* filename, char* byteOffset, char* length) {
+int getErrorCheck(char* filename, char* byteOffset, char* length) {
 	//the user needs to enter digits
 	if (!isdigit(byteOffset[0])) {
 		perror("Byteoffset needs to be a number");
-		_exit(1);
+		return 1;
 	}
 	if (!isdigit(length[0])) {
 		perror("Length needs to be a number");
-		_exit(1);
+		return 1;
 	}
 	//letting the user know of a bad filename and exits
 	if ( access(filename, F_OK) == -1 ) {
 		perror("File doesn't exist");
-		_exit(1);
+		return 1;
 	}
-	return NULL;
+	return 0;
 }
 
 void* get(char* filenameGet, char* byteOffset, char* length, int newsd) {
@@ -46,7 +46,9 @@ void* get(char* filenameGet, char* byteOffset, char* length, int newsd) {
 	strcat(filename, filenameGet);
 	//printf("filename: %s\n", filename);
 
-	getErrorCheck(filename, byteOffset, length);
+	if (getErrorCheck(filename, byteOffset, length)) {
+		return NULL;
+	}
 	int byteOffsetInt = (int)strtol(byteOffset, (char**)NULL, 10);
 	int lengthInt = (int)strtol(length, (char**)NULL, 10);
 
@@ -72,7 +74,7 @@ void* get(char* filenameGet, char* byteOffset, char* length, int newsd) {
 	
 	int fileFd = fileno(fileptr);
 	ssize_t numRead = pread(fileFd, buffer, lengthInt, byteOffsetInt);
-	printf("buffer: %s\n", buffer);
+	//printf("buffer: %s\n", buffer);
 	fflush(NULL);
 
 	if (numRead < 0) {
@@ -92,13 +94,13 @@ void* get(char* filenameGet, char* byteOffset, char* length, int newsd) {
 	return NULL;
 }
 
-void getFiles(char*** directory, int* numFiles, int* directoryInt) {
-	DIR* dir = opendir("storage");
-	struct dirent* file;
-
-	if (dir == NULL) {
-		perror( "opendir() failed" );
-	}
+void* list(int newsd) {
+	int numFiles=0;
+	int i=0;
+	unsigned long toSendLength = 0;
+	DIR *d;
+	struct dirent *dir;
+	d = opendir("storage");
 
 	int ret;
 	ret = chdir("storage");
@@ -107,70 +109,56 @@ void getFiles(char*** directory, int* numFiles, int* directoryInt) {
 		perror( "chdir() failed" );
 	}
 
-	int i = 0;
-	while((file = readdir(dir)) != NULL) {
-		struct stat buf;
+	//Determine the number of files
+	while((dir = readdir(d)) != NULL) {
+	    if ( !strcmp(dir->d_name, ".") || !strcmp(dir->d_name, "..") )
+	    {
 
-		int rc = lstat( file -> d_name, &buf );
+	    } else {
+	        numFiles++;
+	    }
+	}
+	//printf("numFiles: %d\n", numFiles);
+	rewinddir(d);
 
-		if(rc == -1) {
-			perror("lstat() failed");
-		}
+	char *filesList[numFiles];
 
-		if (S_ISREG(buf.st_mode)) {
-			(*numFiles)++;
+	//Put file names into the array
+	while((dir = readdir(d)) != NULL) {
+	    if ( !strcmp(dir->d_name, ".") || !strcmp(dir->d_name, "..") )
+	    {}
+	    else {
+	    	filesList[i] = (char*)calloc(strlen(dir->d_name)+1, sizeof(char));
+	        strncpy (filesList[i], dir->d_name, strlen(dir->d_name) );
+	        //printf("length: %lu\n", strlen(dir->d_name));
+	        toSendLength += strlen(dir->d_name);
+	        i++;
+	    }
+	}
+	rewinddir(d);
 
-			//adding to list of txt files here
-			if (i == 0) {
-				*directory = (char**)calloc(1, sizeof(char*));
-			}
-			else {
-				*directory = realloc(*directory, (i+1)*sizeof(char*));
-			}
+	char strNum[3];
+	sprintf(strNum, "%d ", numFiles);
 
-			(*directory)[i] = (char*)calloc(80 + 1, sizeof(char));
-			strncpy((*directory)[i], file->d_name, 80);
+	i = 0;
+	char* toSend = (char*)calloc(toSendLength+3, sizeof(char));
+	strcat(toSend, strNum);
+	while (i < numFiles) {
+		strcat(toSend, filesList[i]);
+		i += 1;
+	}
+	toSend[toSendLength+2] = '\n';
 
-			#if DEBUG_MODE
-				printf( " -- regular file \n" );
-				fflush(NULL);	
-			#endif
-			i += 1;
-		}
-		else if (S_ISDIR(buf.st_mode)) {
-			#if DEBUG_MODE
-				printf( " -- directory \n");
-				fflush(NULL);
-			#endif
-		}
+	int sendN = send(newsd, toSend, toSendLength+3, 0 );
+
+	if ( sendN != toSendLength+3 ) {
+		perror( "send() failed" );
+		//_exit(1);
 	}
 
 	chdir("..");
-	closedir(dir);
-}
-
-void* list(int* directoryInt, int newsd) {
-	int numFiles = 0;
-	char** directory;
-	getFiles(&directory, &numFiles, &(*directoryInt));
-
-	printf("%d", numFiles);
-	char* toSend = (char*)calloc((81 * numFiles), sizeof(char));
-	int i = 0;
-	while (i < numFiles) {
-		//cant use strcat
-		strcat(toSend, directory[i]);
-		i += 1;
-	}
-
-	int n = send(newsd, toSend, 500, 0 );
-
-	if ( n < 0 ) {
-		perror( "send() failed" );
-		_exit(1);
-	}
-
-	return NULL;
+    closedir(d);
+    return NULL;
 }
 
 char* wordGet(int* i, char* message) {
@@ -208,7 +196,6 @@ char* wordGet(int* i, char* message) {
 
 void* handleMessage(char* message, int newsd) {
 	int counter = 0;
-	int directoryInt = 0;
 	if (message[0] == 'P') {
 		//PUT <filename> <bytes>\n<file-contents>
 		char* putCommand = (char*)calloc(80, sizeof(char));
@@ -253,8 +240,8 @@ void* handleMessage(char* message, int newsd) {
 		char* listCommand = (char*)calloc(80, sizeof(char));
 		listCommand = wordGet(&counter, message);
 
-		list(&directoryInt, newsd);
 		printf("[child %lu] Received LIST\n", pthread_self());
+		list(newsd);
 		
 		free(listCommand);
 	}
@@ -356,6 +343,7 @@ int startConnection() {
 		int newsd = accept( sd, (struct sockaddr *)&client, (socklen_t *)&fromlen );
 
 		printf( "Rcvd incoming TCP connection from %s\n", inet_ntoa( (struct in_addr)client.sin_addr ) );
+		fflush(NULL);
 
 		int rc = pthread_create( &tid, NULL, threadCall, &newsd);
 		if (rc < 0) {
