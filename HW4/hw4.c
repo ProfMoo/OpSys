@@ -92,7 +92,84 @@ void* get(char* filenameGet, char* byteOffset, char* length, int newsd) {
 	return NULL;
 }
 
-void* list(char* message) {
+void getFiles(char*** directory, int* numFiles, int* directoryInt) {
+	DIR* dir = opendir("storage");
+	struct dirent* file;
+
+	if (dir == NULL) {
+		perror( "opendir() failed" );
+	}
+
+	int ret;
+	ret = chdir("storage");
+
+	if (ret == -1) {
+		perror( "chdir() failed" );
+	}
+
+	int i = 0;
+	while((file = readdir(dir)) != NULL) {
+		struct stat buf;
+
+		int rc = lstat( file -> d_name, &buf );
+
+		if(rc == -1) {
+			perror("lstat() failed");
+		}
+
+		if (S_ISREG(buf.st_mode)) {
+			(*numFiles)++;
+
+			//adding to list of txt files here
+			if (i == 0) {
+				*directory = (char**)calloc(1, sizeof(char*));
+			}
+			else {
+				*directory = realloc(*directory, (i+1)*sizeof(char*));
+			}
+
+			(*directory)[i] = (char*)calloc(80 + 1, sizeof(char));
+			strncpy((*directory)[i], file->d_name, 80);
+
+			#if DEBUG_MODE
+				printf( " -- regular file \n" );
+				fflush(NULL);	
+			#endif
+			i += 1;
+		}
+		else if (S_ISDIR(buf.st_mode)) {
+			#if DEBUG_MODE
+				printf( " -- directory \n");
+				fflush(NULL);
+			#endif
+		}
+	}
+
+	chdir("..");
+	closedir(dir);
+}
+
+void* list(int* directoryInt, int newsd) {
+	int numFiles = 0;
+	char** directory;
+	getFiles(&directory, &numFiles, &(*directoryInt));
+
+	printf("%d", numFiles);
+	char* toSend = (char*)calloc((81 * numFiles), sizeof(char));
+	int i = 0;
+	while (i < numFiles) {
+		//cant use strcat
+		strcat(toSend, directory[i]);
+		i += 1;
+	}
+
+	int n = send(newsd, toSend, 500, 0 );
+
+	if ( n < 0 ) {
+		perror( "send() failed" );
+		_exit(1);
+	}
+
 	return NULL;
 }
 
@@ -131,6 +208,7 @@ char* wordGet(int* i, char* message) {
 
 void* handleMessage(char* message, int newsd) {
 	int counter = 0;
+	int directoryInt = 0;
 	if (message[0] == 'P') {
 		//PUT <filename> <bytes>\n<file-contents>
 		char* putCommand = (char*)calloc(80, sizeof(char));
@@ -142,7 +220,7 @@ void* handleMessage(char* message, int newsd) {
 		bytes = wordGet(&counter, message);
 		fileContents = wordGet(&counter, message);
 
-		printf("words: %s, %s, %s, %s\n", putCommand, filenamePut, bytes, fileContents);
+		printf("[child %lu] Received PUT %s %s\n", pthread_self(), filenamePut, fileContents);
 		put(filenamePut, bytes, fileContents);
 		
 		free(putCommand);
@@ -161,7 +239,7 @@ void* handleMessage(char* message, int newsd) {
 		byteOffset = wordGet(&counter, message);
 		length = wordGet(&counter, message);
 
-		printf("words: %s, %s, %s, %s\n", getCommand, filenameGet, byteOffset, length);
+		printf("[child %lu] Received GET %s %s %s\n", pthread_self(), filenameGet, byteOffset, length);
 		get(filenameGet, byteOffset, length, newsd);
 
 		free(getCommand);
@@ -172,12 +250,13 @@ void* handleMessage(char* message, int newsd) {
 	}
 	else if (message[0] == 'L') {
 		//LIST\n
-		char* list = (char*)calloc(80, sizeof(char));
-		list = wordGet(&counter, message);
+		char* listCommand = (char*)calloc(80, sizeof(char));
+		listCommand = wordGet(&counter, message);
 
-		printf("words: %s\n", list);
+		list(&directoryInt, newsd);
+		printf("[child %lu] Received LIST\n", pthread_self());
 		
-		free(list);
+		free(listCommand);
 	}
 	else if (message[0] == 'E') {
 
@@ -193,19 +272,10 @@ void* handleMessage(char* message, int newsd) {
 
 void* threadCall(void* arg) {
     int newsd = *((int *) arg);	
-
-    printf("newsd: %d\n", newsd);
-
     int n;
 	char buffer[ BUFFER_SIZE ];
-	struct sockaddr_in client;
 
 	do {
-		printf( "CHILD %d: Blocked on recv()\n", getpid() );
-
-		/* recv() will block until we receive data (n > 0)
-		or there's an error (n == -1)
-		or the client closed the socket (n == 0) */
 		n = recv( newsd, buffer, BUFFER_SIZE, 0 );
 
 		if ( n == -1 ) {
@@ -213,11 +283,9 @@ void* threadCall(void* arg) {
 			_exit(1);
 		}
 		else if ( n == 0 ) {
-			printf( "CHILD %d: Rcvd 0 from recv(); closing socket...\n", getpid() );
 		}
 		else {
 			buffer[n] = '\0';    /* assume this is text data */
-			printf( "CHILD %d: Rcvd message from %s: Sending to function \"%s\"\n", getpid(), inet_ntoa( (struct in_addr)client.sin_addr ), buffer );
 			handleMessage(buffer, newsd);
 
 			/* send ACK message back to the client */
@@ -274,7 +342,9 @@ int startConnection() {
 		return EXIT_FAILURE;
 	}
 
-	printf( "PARENT: Listener bound to port %d\n", port );
+	printf("Started server\n");
+	printf("Listening for TCP connection on port: %d\n", port);
+	fflush(NULL);
 	struct sockaddr_in client;
 	int fromlen = sizeof( client );
 
@@ -283,15 +353,15 @@ int startConnection() {
 	// char buffer[ BUFFER_SIZE ];
 
 	while ( 1 ) {
-		printf( "PARENT: Blocked on accept()\n" );
 		int newsd = accept( sd, (struct sockaddr *)&client, (socklen_t *)&fromlen );
 
-		printf( "PARENT: Accepted new client connection on sd %d\n", newsd );
+		printf( "Rcvd incoming TCP connection from %s\n", inet_ntoa( (struct in_addr)client.sin_addr ) );
 
 		int rc = pthread_create( &tid, NULL, threadCall, &newsd);
-		printf("MAIN: Created child thread for \"%d\" and printing rc: %d \n", newsd, rc);
-
-		/* Handle the accepted new client connection in a child thread */
+		if (rc < 0) {
+			perror("pthread_create() failed");
+			_exit(1);
+		}
 	}
 
 	return EXIT_SUCCESS;
