@@ -1,0 +1,96 @@
+[12/04/17]
+
+==============================================================================
+
+Principle of Locality
+- if you use a process P, it is likely you will use process P
+again soon.
+
+e.g., page reference stream
+
+	1 2 3 2 1 1 3 4 4 2 4 5 7 2 2 8 3 2 2 1 1 ..........
+
+	given a 3-frame static memory allocation scheme for this process
+
+FIFO(first-in-first-out)
+
+	1 2 3 2 1 1 3 4 4 2 4 5 7 2 2 8 3 2 2 1 1 .......
+  ----------------------------------------------------------------------
+  . 1 1 1 1 1 1 1 4 4 4 4 4 4 2 2 2 2 2 2 1 1
+  . . 2 2 2 2 2 2 2 2 2 2 5 5 5 5 8 8 8 8 8 8
+  . . . 3 3 3 3 3 3 3 3 3 3 7 7 7 7 3 3 3 3 3
+  ----------------------------------------------------------------------
+  	p p p 		  p		  p p p   p p     p        <== page faults (10)
+
+LRU(least-recently used)
+
+	1 2 3 2 1 1 3 4 4 2 4 5 7 2 2 8 3 2 2 1 1 .......
+  ----------------------------------------------------------------------
+  . 1 1 1 1 1 1 1 1 1 2 2 2 7 7 7 7 3 3 3 3 3
+  . . 2 2 2 2 2 2 4 4 4 4 4 4 2 2 2 2 2 2 2 2
+  . . . 3 3 3 3 3 3 3 3 3 5 5 5 5 8 8 8 8 1 1
+  ----------------------------------------------------------------------
+  	p p p 		  p   p   p p p   p p     p        <== page faults (11)
+
+LFU(least-frequently used)
+
+	(if a tie occurs, use LRU algorithm)
+
+	1 2 3 2 1 1 3 4 4 2 4 5 7 2 2 8 3 2 2 1 1 .......
+  ----------------------------------------------------------------------
+  . 1 1 1 1 1 1 1 1 1 1 1 5 7 7 7 8 3 3 3 3 3
+  . . 2 2 2 2 2 2 4 4 4 4 4 4 4 4 4 4 4 4 1 1
+  . . . 3 3 3 3 3 3 3 2 2 2 2 2 2 2 2 2 2 2 2
+  ----------------------------------------------------------------------
+  	p p p 		  p   p   p p     p p     p          <== page faults (10)
+
+  	Disadvantages of LFU:
+  	-- additional overhead to keep track of page reference counts for each page in physical memory
+  	-- pages that stick around long enough have a high frequency count, but new pages that come
+  	in always (re)start at 1
+
+OPT(optimal -- looking forward in time...)
+
+	--replace the one you dont use for the longest time
+
+	1 2 3 2 1 1 3 4 4 2 4 5 7 2 2 8 3 2 2 1 1 .......
+  ----------------------------------------------------------------------
+  . 1 1 1 1 1 1 1 4 4 4 4 5 7 7 7 8 8 8 8 1 1
+  . . 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2
+  . . . 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3
+  ----------------------------------------------------------------------
+  	p p p 		  p       p p     p       p          <== page faults (8)
+
+Working Set
+	--actively changing how many pages per process depending on the number
+	of unique pages in the working set
+
+	e.g., working set delta of 2 (i.e., go back 2 steps)
+
+			v
+	1 2 3 2 1 1 3 4 4 2 4 5 7 2 2 8 3 2 2 1 1 .......
+		^   ^
+		|<->|		working set is (1,2,3)
+
+			  v
+	1 2 3 2 1 1 3 4 4 2 4 5 7 2 2 8 3 2 2 1 1 .......
+		  ^   ^
+		  |<->|		working set is (1,2)
+
+
+	e.g., working set delta of 5 (i.e., go back 5 steps)
+
+			  v
+	1 2 3 2 1 1 3 4 4 2 4 5 7 2 2 8 3 2 2 1 1 .......
+	^	      ^
+	|<------->|		working set is (1,2,3)
+
+			      v
+	1 2 3 2 1 1 3 4 4 2 4 5 7 2 2 8 3 2 2 1 1 .......
+	   ^	      ^
+	   |<-------->|		working set is (1,2,3,4)
+
+			        v
+	1 2 3 2 1 1 3 4 4 2 4 5 7 2 2 8 3 2 2 1 1 .......
+	      ^	        ^
+	      |<------->|		working set is (1,2,3,4)
