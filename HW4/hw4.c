@@ -14,11 +14,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-//#include "hw4.h"
-
 #define BUFFER_SIZE 1024
 
-int putErrorCheck(int newsd, char* filename, char* bytes, char* fileContents) {
+int putErrorCheck(int newsd, char* filename, int bytes) {
 	if ( access(filename, F_OK) == -1 ) {
 
 	}
@@ -52,11 +50,39 @@ void* putSendAck(int newsd) {
 	return NULL;
 }
 
-void* put(int newsd, char* filenamePut, char* bytes, char* fileContents) {
+void* put(int newsd, char* filenamePut, int bytes) {
 	//def.txt has 1139 bytes
-	putErrorCheck(newsd, filenamePut, bytes, fileContents);
+	char filename[64];
+	strcpy(filename, "storage/");
+	strcat(filename, filenamePut);
+
+	if (putErrorCheck(newsd, filename, bytes)) {
+		return NULL;
+	}
+
+	//check for message here
+	char buffer[ bytes ];
+	int n = read( newsd, buffer, bytes );
+	if (n < 0) {
+		printf("FUCK");
+	}
+
+	//printf("buffer: %s\n", buffer);
+
+	FILE *f = fopen(filename, "w");
+	if (f == NULL)
+	{
+	    printf("Error opening file!\n");
+	    _exit(1);
+	}
+	fprintf(f, "%s", buffer);
+	fclose(f);
 
 	putSendAck(newsd);
+	
+	printf("[child %lu] Stored file \"%s\" (%d bytes)\n", pthread_self(), filenamePut, bytes);
+	fflush(NULL);
+	
 	return NULL;
 }
 
@@ -273,19 +299,17 @@ void* handleMessage(char* message, int newsd) {
 		char* putCommand = (char*)calloc(80, sizeof(char));
 		char* filenamePut = (char*)calloc(80, sizeof(char));
 		char* bytes = (char*)calloc(80, sizeof(char));
-		char* fileContents = (char*)calloc(80, sizeof(char));
 		putCommand = wordGet(&counter, message);
 		filenamePut = wordGet(&counter, message);
 		bytes = wordGet(&counter, message);
-		fileContents = wordGet(&counter, message);
+		int bytesInt = (int)strtol(bytes, (char**)NULL, 10);
 
-		printf("[child %lu] Received PUT %s %s\n", pthread_self(), filenamePut, fileContents);
-		put(newsd, filenamePut, bytes, fileContents);
+		printf("[child %lu] Received PUT %s %s\n", pthread_self(), filenamePut, bytes);
+		put(newsd, filenamePut, bytesInt);
 		
 		free(putCommand);
 		free(filenamePut);
 		free(bytes);
-		free(fileContents);
 	}
 	else if (message[0] == 'G') {
 		//GET <filename> <byte-offset> <length>\n
@@ -321,11 +345,11 @@ void* handleMessage(char* message, int newsd) {
 
 		_exit(0);
 	}
-	else {
-		perror("bad message, son");
+	// else {
+	// 	perror("bad message, son");
 
-		_exit(0);
-	}
+	// 	_exit(0);
+	// }
 	return NULL;
 }
 
