@@ -187,6 +187,8 @@ int main()
     printf( "Rcvd from server: %s\n", buffer );
   }
 
+  while(1);
+
   close( sd );
 
   return EXIT_SUCCESS;

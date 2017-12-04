@@ -16,6 +16,8 @@
 
 #define BUFFER_SIZE 1024
 
+pthread_mutex_t directory = PTHREAD_MUTEX_INITIALIZER;
+
 int putErrorCheck(int newsd, char* filename, int bytes) {
 	if ( access(filename, F_OK) == -1 ) {
 
@@ -124,6 +126,8 @@ void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 
 	//convert byteoffset and length, add and see if longer than file
 	if (byteOffsetInt + lengthInt > filelen) {
+		printf("[child %lu] Sent ERROR INVALID BYTE RANGE\n", pthread_self());
+		fflush(NULL);
 		int n = send( newsd, "ERROR INVALID BYTE RANGE\n", 25, 0 );
 		if ( n != 25 ) {
 			perror( "send() failed" );
@@ -150,7 +154,6 @@ void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 	
 	int fileFd = fileno(fileptr);
 	ssize_t numRead = pread(fileFd, buffer, lengthInt, byteOffsetInt);
-	buffer[lengthInt] = '\n';
 
 	if (numRead < 0) {
 		perror("Error, file not read. pread() failed");
@@ -306,7 +309,10 @@ void* handleMessage(char* message, int newsd) {
 
 		printf("[child %lu] Received PUT %s %s\n", pthread_self(), filenamePut, bytes);
 		fflush(NULL);
+
+		pthread_mutex_lock(&directory);
 		put(newsd, filenamePut, bytesInt, fileContents);
+		pthread_mutex_unlock(&directory);
 		
 		free(putCommand);
 		free(filenamePut);
@@ -325,7 +331,10 @@ void* handleMessage(char* message, int newsd) {
 
 		printf("[child %lu] Received GET %s %s %s\n", pthread_self(), filenameGet, byteOffset, length);
 		fflush(NULL);
+
+		pthread_mutex_lock(&directory);
 		get(newsd, filenameGet, byteOffset, length);
+		pthread_mutex_unlock(&directory);
 
 		free(getCommand);
 		free(filenameGet);
@@ -340,7 +349,10 @@ void* handleMessage(char* message, int newsd) {
 
 		printf("[child %lu] Received LIST\n", pthread_self());
 		fflush(NULL);
+
+		pthread_mutex_lock(&directory);
 		list(newsd);
+		pthread_mutex_unlock(&directory);
 		
 		free(listCommand);
 	}
