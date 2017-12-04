@@ -15,6 +15,9 @@
 
 int main()
 {
+  int n;
+  char* msg;
+  char buffer[BUFFER_SIZE];
   /* create TCP client socket (endpoint) */
   int sd = socket( PF_INET, SOCK_STREAM, 0 );
 
@@ -60,8 +63,8 @@ int main()
   //      COMMAND ONE
   //========================================================================
   //sending command
-  char * msg = "PUT mouse.txt 14\nHELLOHELLOHELL";
-  int n = write( sd, msg, strlen( msg ) );
+  msg = "PUT mouse.txt 14\nHELLOHELLOHELL";
+  n = write( sd, msg, strlen( msg ) );
 
   if ( n < strlen( msg ) )
   {
@@ -71,7 +74,6 @@ int main()
 
  
   //getting ACK back
-  char buffer[ BUFFER_SIZE ];
   n = read( sd, buffer, BUFFER_SIZE -1 );    /* BLOCKING */
 
   if ( n == -1 )
@@ -93,8 +95,8 @@ int main()
   //      COMMAND TWO
   //========================================================================
   //sending command
-  char * msg = "PUT chicken.txt 14\nH";
-  int n = write( sd, msg, strlen( msg ) );
+  msg = "PUT chicken.txt 31\nHELLOTHEREHELLOTHEREHELLOTHEREH";
+  n = write( sd, msg, strlen( msg ) );
 
   if ( n < strlen( msg ) )
   {
@@ -104,7 +106,70 @@ int main()
 
  
   //getting ACK back
-  char buffer[ BUFFER_SIZE ];
+  n = read( sd, buffer, BUFFER_SIZE -1 );    /* BLOCKING */
+
+  if ( n == -1 )
+  {
+    perror( "read() failed" );
+    return EXIT_FAILURE;
+  }
+  else if ( n == 0 )
+  {
+    printf( "Rcvd no data; also, server socket was closed\n" );
+  }
+  else
+  {
+    buffer[n] = '\0';    /* assume we rcvd text-based data */
+    printf( "Rcvd from server: %s\n", buffer );
+  }
+
+    //========================================================================
+  //      COMMAND THREE
+  //========================================================================
+  //sending command
+  msg = "GET chicken.txt 10 15";
+  n = write( sd, msg, strlen( msg ) );
+
+  if ( n < strlen( msg ) )
+  {
+    perror( "write() failed" );
+    return EXIT_FAILURE;
+  }
+
+ 
+  //getting ACK back
+  n = read( sd, buffer, BUFFER_SIZE -1 );    /* BLOCKING */
+
+  if ( n == -1 )
+  {
+    perror( "read() failed" );
+    return EXIT_FAILURE;
+  }
+  else if ( n == 0 )
+  {
+    printf( "Rcvd no data; also, server socket was closed\n" );
+  }
+  else
+  {
+    buffer[n] = '\0';    /* assume we rcvd text-based data */
+    printf( "Rcvd from server: %s\n", buffer );
+  }
+
+      //========================================================================
+  //      COMMAND THREE
+  //========================================================================
+  //sending command
+  msg = "GET chicken.txt 30 2";
+  n = write( sd, msg, strlen( msg ) );
+
+  if ( n < strlen( msg ) )
+  {
+    perror( "write() failed" );
+    return EXIT_FAILURE;
+  }
+
+ 
+  //getting ACK back
   n = read( sd, buffer, BUFFER_SIZE -1 );    /* BLOCKING */
 
   if ( n == -1 )

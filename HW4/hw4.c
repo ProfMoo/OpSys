@@ -33,13 +33,14 @@ int putErrorCheck(int newsd, char* filename, int bytes) {
 }
 
 void* putSendAck(int newsd) {
-	char* toSend = (char*)calloc(4, sizeof(char));
+	int intSent = 4;
+	char* toSend = (char*)calloc(intSent, sizeof(char));
 	strcat(toSend, "ACK");
-	toSend[3] = '\n';
+	toSend[intSent-1] = '\n';
 
-	int n = send( newsd, toSend, 4, 0 );
+	int n = send( newsd, toSend, intSent, 0 );
 
-	if (n != 4) {
+	if (n != intSent) {
 		perror("ERROR. ACK DIDNT SEND");
 		_exit(1);
 	}
@@ -50,7 +51,7 @@ void* putSendAck(int newsd) {
 	return NULL;
 }
 
-void* put(int newsd, char* filenamePut, int bytes) {
+void* put(int newsd, char* filenamePut, int bytes, char* fileContents) {
 	//def.txt has 1139 bytes
 	char filename[64];
 	strcpy(filename, "storage/");
@@ -60,29 +61,20 @@ void* put(int newsd, char* filenamePut, int bytes) {
 		return NULL;
 	}
 
-	//check for message here
-	char buffer[ bytes ];
-	int n = read( newsd, buffer, bytes );
-	if (n < 0) {
-		printf("FUCK");
-	}
-
-	//printf("buffer: %s\n", buffer);
-
 	FILE *f = fopen(filename, "w");
 	if (f == NULL)
 	{
 	    printf("Error opening file!\n");
 	    _exit(1);
 	}
-	fprintf(f, "%s", buffer);
+	fprintf(f, "%s", fileContents);
 	fclose(f);
 
-	putSendAck(newsd);
-	
 	printf("[child %lu] Stored file \"%s\" (%d bytes)\n", pthread_self(), filenamePut, bytes);
 	fflush(NULL);
-	
+
+	putSendAck(newsd);
+
 	return NULL;
 }
 
@@ -99,6 +91,7 @@ int getErrorCheck(int newsd, char* filename, char* byteOffset, char* length) {
 	//letting the user know of a bad filename and exits
 	if ( access(filename, F_OK) == -1 ) {
 		printf("[child %lu] Sent ERROR NO SUCH FILE\n", pthread_self());
+		fflush(NULL);
 		int n = send( newsd, "ERROR NO SUCH FILE\n", 19, 0 );
 		if ( n != 19 ) {
 			perror( "send() failed" );
@@ -109,26 +102,6 @@ int getErrorCheck(int newsd, char* filename, char* byteOffset, char* length) {
 	return 0;
 }
 
-void* getSendAck(int newsd, char* length) {
-	int intLength = strlen(length);
-	char* toSend = (char*)calloc(5 + intLength, sizeof(char));
-	strcat(toSend, "ACK ");
-	strcat(toSend, length);
-	toSend[4+intLength] = '\n';
-
-	int n = send( newsd, toSend, 5 + intLength, 0 );
-
-	if (n != 5 + intLength) {
-		perror("ERROR. ACK DIDNT SEND");
-		_exit(1);
-	}
-
-	printf("[child %lu] Sent %s", pthread_self(), toSend);
-	fflush(NULL);
-	free(toSend);
-	return NULL;
-}
-
 void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 	char filename[64];
 	strcpy(filename, "storage/");
@@ -137,8 +110,6 @@ void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 	if (getErrorCheck(newsd, filename, byteOffset, length)) {
 		return NULL;
 	}
-
-	getSendAck(newsd, length);
 
 	int byteOffsetInt = (int)strtol(byteOffset, (char**)NULL, 10);
 	int lengthInt = (int)strtol(length, (char**)NULL, 10);
@@ -163,20 +134,37 @@ void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 
 	rewind(fileptr);					// Jump back to the beginning of the file
 
+	//making the ACK in here
+	int intLength = strlen(length);
+	int intSent = 5 + intLength;
+	char* toSend = (char*)calloc(intSent, sizeof(char));
+	strcat(toSend, "ACK ");
+	strcat(toSend, length);
+	toSend[intSent-1] = '\n';
+
+	printf("[child %lu] Sent %s", pthread_self(), toSend);
+	fflush(NULL);
+	//done making ACK
+
 	buffer = (char *)malloc((lengthInt+1)*sizeof(char));
 	
 	int fileFd = fileno(fileptr);
 	ssize_t numRead = pread(fileFd, buffer, lengthInt, byteOffsetInt);
+	buffer[lengthInt] = '\n';
 
 	if (numRead < 0) {
 		perror("Error, file not read. pread() failed");
 		_exit(1);
 	}
 	
-	buffer[lengthInt] = '\n';
-	int n = send( newsd, buffer, lengthInt+1, 0 );
+	int totalLength = lengthInt+1+intSent;
+	char* totalBuff = (char*)malloc(totalLength*sizeof(char));
+	strcat(totalBuff, toSend);
+	strcat(totalBuff, buffer);
 
-	if ( n != lengthInt+1 ) {
+	int n = send( newsd, totalBuff, totalLength, 0 );
+
+	if ( n != totalLength ) {
 		perror( "send() failed" );
 		_exit(1);
 	}
@@ -186,6 +174,7 @@ void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 
 	fclose(fileptr); // Close the file
 	free(buffer);
+	free(toSend);
 
 	return NULL;
 }
@@ -237,22 +226,28 @@ void* list(int newsd) {
 	sprintf(strNum, "%d ", numFiles);
 
 	i = 0;
-	char* toSend = (char*)calloc(toSendLength+3, sizeof(char));
+	int lengthMalloc = toSendLength+3+(numFiles-1);
+	char* toSend = (char*)calloc(lengthMalloc, sizeof(char));
 	strcat(toSend, strNum);
 	while (i < numFiles) {
+		fflush(NULL);
 		strcat(toSend, filesList[i]);
+		if (i != (numFiles-1)) {
+			strcat(toSend, " ");
+		}
 		i += 1;
 	}
-	toSend[toSendLength+2] = '\n';
+	toSend[lengthMalloc-1] = '\n';
 
-	int sendN = send(newsd, toSend, toSendLength+3, 0 );
+	int sendN = send(newsd, toSend, lengthMalloc, 0 );
 
-	if ( sendN != toSendLength+3 ) {
+	if ( sendN != lengthMalloc ) {
 		perror( "send() failed" );
 		//_exit(1);
 	}
 
 	printf("[child %lu] Sent %s", pthread_self(), toSend);
+	fflush(NULL);
 
 	chdir("..");
     closedir(d);
@@ -302,10 +297,16 @@ void* handleMessage(char* message, int newsd) {
 		putCommand = wordGet(&counter, message);
 		filenamePut = wordGet(&counter, message);
 		bytes = wordGet(&counter, message);
+
 		int bytesInt = (int)strtol(bytes, (char**)NULL, 10);
+		char* fileContents = (char*)calloc(bytesInt, sizeof(char));
+		fileContents = wordGet(&counter, message);
+
+		//printf("fileContents: %s\n", fileContents);
 
 		printf("[child %lu] Received PUT %s %s\n", pthread_self(), filenamePut, bytes);
-		put(newsd, filenamePut, bytesInt);
+		fflush(NULL);
+		put(newsd, filenamePut, bytesInt, fileContents);
 		
 		free(putCommand);
 		free(filenamePut);
@@ -323,6 +324,7 @@ void* handleMessage(char* message, int newsd) {
 		length = wordGet(&counter, message);
 
 		printf("[child %lu] Received GET %s %s %s\n", pthread_self(), filenameGet, byteOffset, length);
+		fflush(NULL);
 		get(newsd, filenameGet, byteOffset, length);
 
 		free(getCommand);
@@ -337,6 +339,7 @@ void* handleMessage(char* message, int newsd) {
 		listCommand = wordGet(&counter, message);
 
 		printf("[child %lu] Received LIST\n", pthread_self());
+		fflush(NULL);
 		list(newsd);
 		
 		free(listCommand);
@@ -363,9 +366,13 @@ void* threadCall(void* arg) {
 
 		if ( n == -1 ) {
 			perror( "recv() failed" );
+			close(newsd);
 			_exit(1);
 		}
 		else if ( n == 0 ) {
+			printf("[child %lu] Client disconnected\n", pthread_self());
+			close(newsd);
+			fflush(NULL);
 		}
 		else {
 			buffer[n] = '\0';    /* assume this is text data */
