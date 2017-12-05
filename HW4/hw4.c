@@ -51,7 +51,10 @@ void* putSendAck(int newsd) {
 
 void* put(int newsd, char* filenamePut, int bytes, char* fileContents) {
 	//def.txt has 1139 bytes
-	FILE *f = fopen(filenamePut, "a");
+	FILE* f = fopen(filenamePut, "a");
+
+	printf("fileContents: %s\n", fileContents);
+	fflush(NULL);
 	//fseek(f, 0, SEEK_END);
 	if (f == NULL)
 	{
@@ -225,7 +228,6 @@ void* list(int newsd) {
 		i += 1;
 	}
 	toSend[lengthMalloc-2] = '\n';
-	toSend[lengthMalloc-1] = '\n';
 
 	int sendN = send(newsd, toSend, lengthMalloc, 0 );
 
@@ -325,11 +327,13 @@ void* handleMessage(char* message, int newsd) {
 			return NULL;
 		}
 
-		int numPerScan = 100;
+		int numPerScan = 1024;
 		char* fileContents = (char*)calloc(numPerScan+1, sizeof(char));
 
 		pthread_mutex_lock(&directory);
 		int numThisScan;
+		counter++;
+		//counter++;
 		while (bytesInt > numPerScan) { //while the amount of bytes in the file is greater than the amount per scan
 			numThisScan = 0;
 			fileContents = wordGetPut(&fileContents, &counter, message, numPerScan, &numThisScan);
@@ -412,7 +416,7 @@ void* handleMessage(char* message, int newsd) {
 	}
 	else if (message[0] == 'E') {
 
-		_exit(0);
+		_exit(EXIT_SUCCESS);
 	}
 	// else {
 	// 	perror("bad message, son");
@@ -431,14 +435,15 @@ void* threadCall(void* arg) {
 		n = recv( newsd, buffer, BUFFER_SIZE, 0 );
 
 		if ( n == -1 ) {
-			perror( "recv() failed" );
+			printf("[child %lu] Client disconnected\n", pthread_self());
+			fflush(NULL);
 			close(newsd);
 			_exit(1);
 		}
 		else if ( n == 0 ) {
 			printf("[child %lu] Client disconnected\n", pthread_self());
-			close(newsd);
 			fflush(NULL);
+			close(newsd);
 		}
 		else {
 			buffer[n] = '\0';    /* assume this is text data */
