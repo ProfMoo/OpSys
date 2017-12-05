@@ -18,12 +18,13 @@
 
 pthread_mutex_t directory = PTHREAD_MUTEX_INITIALIZER;
 
-int putErrorCheck(int newsd, char* filename, int bytes) {
+int putErrorCheck(int newsd, char* filename) {
 	if ( access(filename, F_OK) == -1 ) {
 
 	}
 	else {
-		perror("ERROR FILE EXISTS\n");
+		printf("[child %lu] Sent ERROR FILE EXISTS\n", pthread_self());
+		fflush(NULL);
 		int n = send( newsd, "ERROR FILE EXISTS\n", 18, 0 );
 		if ( n != 18 ) {
 			perror( "send() failed" );
@@ -35,35 +36,23 @@ int putErrorCheck(int newsd, char* filename, int bytes) {
 }
 
 void* putSendAck(int newsd) {
-	int intSent = 4;
-	char* toSend = (char*)calloc(intSent, sizeof(char));
-	strcat(toSend, "ACK");
-	toSend[intSent-1] = '\n';
+	int n = send( newsd, "ACK\n", 4, 0 );
 
-	int n = send( newsd, toSend, intSent, 0 );
-
-	if (n != intSent) {
+	if (n != 4) {
 		perror("ERROR. ACK DIDNT SEND");
 		_exit(1);
 	}
 
 	printf("[child %lu] Sent ACK\n", pthread_self());
 	fflush(NULL);
-	free(toSend);
+
 	return NULL;
 }
 
 void* put(int newsd, char* filenamePut, int bytes, char* fileContents) {
 	//def.txt has 1139 bytes
-	char filename[64];
-	strcpy(filename, "storage/");
-	strcat(filename, filenamePut);
-
-	if (putErrorCheck(newsd, filename, bytes)) {
-		return NULL;
-	}
-
-	FILE *f = fopen(filename, "w");
+	FILE *f = fopen(filenamePut, "a");
+	//fseek(f, 0, SEEK_END);
 	if (f == NULL)
 	{
 	    printf("Error opening file!\n");
@@ -71,11 +60,6 @@ void* put(int newsd, char* filenamePut, int bytes, char* fileContents) {
 	}
 	fprintf(f, "%s", fileContents);
 	fclose(f);
-
-	printf("[child %lu] Stored file \"%s\" (%d bytes)\n", pthread_self(), filenamePut, bytes);
-	fflush(NULL);
-
-	putSendAck(newsd);
 
 	return NULL;
 }
@@ -140,11 +124,11 @@ void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 
 	//making the ACK in here
 	int intLength = strlen(length);
-	int intSent = 5 + intLength;
+	int intSent = 6 + intLength;
 	char* toSend = (char*)calloc(intSent, sizeof(char));
 	strcat(toSend, "ACK ");
 	strcat(toSend, length);
-	toSend[intSent-1] = '\n';
+	toSend[intSent-2] = '\n';
 
 	printf("[child %lu] Sent %s", pthread_self(), toSend);
 	fflush(NULL);
@@ -161,13 +145,13 @@ void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 	}
 	
 	int totalLength = lengthInt+1+intSent;
-	char* totalBuff = (char*)malloc(totalLength*sizeof(char));
+	char totalBuff[totalLength];
 	strcat(totalBuff, toSend);
 	strcat(totalBuff, buffer);
 
-	int n = send( newsd, totalBuff, totalLength, 0 );
+	int n = send( newsd, totalBuff, totalLength-1, 0 );
 
-	if ( n != totalLength ) {
+	if ( n != totalLength-1 ) {
 		perror( "send() failed" );
 		_exit(1);
 	}
@@ -229,7 +213,7 @@ void* list(int newsd) {
 	sprintf(strNum, "%d ", numFiles);
 
 	i = 0;
-	int lengthMalloc = toSendLength+3+(numFiles-1);
+	int lengthMalloc = toSendLength+4+(numFiles-1);
 	char* toSend = (char*)calloc(lengthMalloc, sizeof(char));
 	strcat(toSend, strNum);
 	while (i < numFiles) {
@@ -240,6 +224,7 @@ void* list(int newsd) {
 		}
 		i += 1;
 	}
+	toSend[lengthMalloc-2] = '\n';
 	toSend[lengthMalloc-1] = '\n';
 
 	int sendN = send(newsd, toSend, lengthMalloc, 0 );
@@ -252,13 +237,20 @@ void* list(int newsd) {
 	printf("[child %lu] Sent %s", pthread_self(), toSend);
 	fflush(NULL);
 
+	free(toSend);
+	i = 0;
+	while (i < numFiles) {
+		free(filesList[i]);
+		i += 1;
+	}
+
 	chdir("..");
     closedir(d);
     return NULL;
 }
 
-char* wordGet(int* i, char* message) {
-	char* singleWord = (char*)calloc(80, sizeof(char));
+char* wordGet(int* i, char* message, int numAlloc) {
+	char* singleWord = (char*)calloc(numAlloc, sizeof(char));
 	int j = 0;
 	for(; *i < strlen(message); (*i)++) {
 		// printf("i: %d\n", *i);
@@ -290,44 +282,105 @@ char* wordGet(int* i, char* message) {
 	return NULL;
 }
 
+char* wordGetPut(char** fileContents, int* i, char* message, int maxLength, int* currentRun) {
+	int j = 0;
+	(*fileContents)[0] = message[(*i)];
+	while(1) {
+		j += 1;
+		if ((*currentRun) == maxLength) {
+			break;
+		}
+		else {
+			(*fileContents)[j] = message[(*i)+j]; 
+			(*currentRun)++;
+		}
+	}
+
+	(*i) += j;
+	return(*fileContents);
+}
+
 void* handleMessage(char* message, int newsd) {
 	int counter = 0;
 	if (message[0] == 'P') {
 		//PUT <filename> <bytes>\n<file-contents>
-		char* putCommand = (char*)calloc(80, sizeof(char));
-		char* filenamePut = (char*)calloc(80, sizeof(char));
-		char* bytes = (char*)calloc(80, sizeof(char));
-		putCommand = wordGet(&counter, message);
-		filenamePut = wordGet(&counter, message);
-		bytes = wordGet(&counter, message);
+		char* putCommand;
+		char* filenamePut;
+		char* bytes;
+		putCommand = wordGet(&counter, message, 81);
+		filenamePut = wordGet(&counter, message, 81);
+		bytes = wordGet(&counter, message, 81);
+		putCommand[80] = '\0';
+		filenamePut[80] = '\0';
+		bytes[80] = '\0';
 
+		//this is the total amount of bytes needed to be stored
 		int bytesInt = (int)strtol(bytes, (char**)NULL, 10);
-		char* fileContents = (char*)calloc(bytesInt, sizeof(char));
-		fileContents = wordGet(&counter, message);
+
+		char filenameP[64];
+		strcpy(filenameP, "storage/");
+		strcat(filenameP, filenamePut);
+
+		if (putErrorCheck(newsd, filenameP)) {
+			return NULL;
+		}
+
+		int numPerScan = 100;
+		char* fileContents = (char*)calloc(numPerScan+1, sizeof(char));
+
+		pthread_mutex_lock(&directory);
+		int numThisScan;
+		while (bytesInt > numPerScan) { //while the amount of bytes in the file is greater than the amount per scan
+			numThisScan = 0;
+			fileContents = wordGetPut(&fileContents, &counter, message, numPerScan, &numThisScan);
+			fileContents[numThisScan+1] = '\0';
+			//printf("bytesInt2: %d\n", bytesInt);
+			//printf("fileContents2: %s\n", fileContents);
+			fflush(NULL);
+			put(newsd, filenameP, bytesInt, fileContents);
+			//printf("bytesInt2a: %d\n", bytesInt);
+			bytesInt -= numThisScan;
+			//printf("bytesInt2b: %d\n", bytesInt);
+			fflush(NULL);
+		}
+		numThisScan = 0;
+		fileContents = wordGetPut(&fileContents, &counter, message, numPerScan, &numThisScan);
+		fileContents[numThisScan+1] = '\0';
+		//printf("bytesInt1: %d\n", bytesInt);
+		//printf("fileContents1: %s\n", fileContents);
+		fflush(NULL);
+		put(newsd, filenameP, bytesInt, fileContents);
+		pthread_mutex_unlock(&directory);
 
 		//printf("fileContents: %s\n", fileContents);
 
 		printf("[child %lu] Received PUT %s %s\n", pthread_self(), filenamePut, bytes);
 		fflush(NULL);
 
-		pthread_mutex_lock(&directory);
-		put(newsd, filenamePut, bytesInt, fileContents);
-		pthread_mutex_unlock(&directory);
-		
+		printf("[child %lu] Stored file \"%s\" (%s bytes)\n", pthread_self(), filenamePut, bytes);
+		fflush(NULL);
+
+		putSendAck(newsd);
+
 		free(putCommand);
 		free(filenamePut);
 		free(bytes);
+		free(fileContents);
 	}
 	else if (message[0] == 'G') {
 		//GET <filename> <byte-offset> <length>\n
-		char* getCommand = (char*)calloc(80, sizeof(char));
-		char* filenameGet = (char*)calloc(80, sizeof(char));
-		char* byteOffset = (char*)calloc(80, sizeof(char));
-		char* length = (char*)calloc(80, sizeof(char));
-		getCommand = wordGet(&counter, message);
-		filenameGet = wordGet(&counter, message);
-		byteOffset = wordGet(&counter, message);
-		length = wordGet(&counter, message);
+		char* getCommand;
+		char* filenameGet;
+		char* byteOffset;
+		char* length;
+		getCommand = wordGet(&counter, message, 81);
+		filenameGet = wordGet(&counter, message, 81);
+		byteOffset = wordGet(&counter, message, 81);
+		length = wordGet(&counter, message, 81);
+		getCommand[80] = '\0';
+		filenameGet[80] = '\0';
+		byteOffset[80] = '\0';
+		length[80] = '\0';
 
 		printf("[child %lu] Received GET %s %s %s\n", pthread_self(), filenameGet, byteOffset, length);
 		fflush(NULL);
@@ -344,8 +397,9 @@ void* handleMessage(char* message, int newsd) {
 	}
 	else if (message[0] == 'L') {
 		//LIST\n
-		char* listCommand = (char*)calloc(80, sizeof(char));
-		listCommand = wordGet(&counter, message);
+		char* listCommand;
+		listCommand = wordGet(&counter, message, 81);
+		listCommand[80] = '\0';
 
 		printf("[child %lu] Received LIST\n", pthread_self());
 		fflush(NULL);
@@ -388,6 +442,8 @@ void* threadCall(void* arg) {
 		}
 		else {
 			buffer[n] = '\0';    /* assume this is text data */
+			//printf("buffer: %s\n", buffer);
+			//printf("strlen(buffer): %lu\n", strlen(buffer));
 			handleMessage(buffer, newsd);
 		}
 	}

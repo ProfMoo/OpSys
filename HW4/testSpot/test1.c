@@ -1,3 +1,14 @@
+/*-- start the server with "./a.out <port-number>"
+-- client A connects
+-- client A sends "PUT mouse.txt 917\n<mouse.txt>"
+-- client A should receive "ACK\n"
+-- client A sends "GET xyz.jpg 5555 2000\n"
+-- client A should receive "ERROR NO SUCH FILE\n"
+-- client A sends "LIST\n"
+-- client A should receive "1 mouse.txt\n"
+-- client A disconnects
+*/
+
 //342 bytes in def.txt
 
 #include <sys/types.h>
@@ -63,7 +74,11 @@ int main()
   //      COMMAND ONE
   //========================================================================
   //sending command
-  msg = "PUT mouse.txt 14\nHELLOHELLOHELL";
+ // msg = "PUT mouse.txt 917\nAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBBAAAAABBBBB7777777";
+  
+
+  msg = "PUT mouse.txt 917\nOnce when a Lion was asleep a little Mouse began running up and down upon him; this soon wakened the Lion, who placed his huge paw upon him, and opened his big jaws to swallow him. \"Pardon, O King,\" cried the little Mouse: \"forgive me this time, I shall never forget it: who knows but what I may be able to do you a turn some of these days?\" The Lion was so tickled at the idea of the Mouse being able to help him, that he lifted up his paw and let him go. Some time after the Lion was caught in a trap, and the hunters, who desired to carry him alive to the King, tied him to a tree while they went in search of a wagon to carry him on. Just then the little Mouse happened to pass by, and seeing the sad plight in which the Lion was, sent up to him and soon gnawed away the ropes that bound the King of the Beasts. \"Was I not right?\" said the little Mouse.\n\"LITTLE FRIENDS MAY PROVE GREAT FRIENDS.\"";
+
   n = write( sd, msg, strlen( msg ) );
 
   if ( n < strlen( msg ) )
@@ -95,7 +110,7 @@ int main()
   //      COMMAND TWO
   //========================================================================
   //sending command
-  msg = "PUT chicken.txt 31\nHELLOTHEREHELLOTHEREHELLOTHEREH";
+  msg = "GET xyz.jpg 5555 2000\n";
   n = write( sd, msg, strlen( msg ) );
 
   if ( n < strlen( msg ) )
@@ -127,39 +142,7 @@ int main()
   //      COMMAND THREE
   //========================================================================
   //sending command
-  msg = "GET chicken.txt 29 1";
-  n = write( sd, msg, strlen( msg ) );
-
-  if ( n < strlen( msg ) )
-  {
-    perror( "write() failed" );
-    return EXIT_FAILURE;
-  }
-
- 
-  //getting ACK back
-  n = read( sd, buffer, BUFFER_SIZE -1 );    /* BLOCKING */
-
-  if ( n == -1 )
-  {
-    perror( "read() failed" );
-    return EXIT_FAILURE;
-  }
-  else if ( n == 0 )
-  {
-    printf( "Rcvd no data; also, server socket was closed\n" );
-  }
-  else
-  {
-    buffer[n] = '\0';    /* assume we rcvd text-based data */
-    printf( "Rcvd from server: %s\n", buffer );
-  }
-
-      //========================================================================
-  //      COMMAND THREE
-  //========================================================================
-  //sending command
-  msg = "GET chicken.txt 30 2";
+  msg = "LIST\n";
   n = write( sd, msg, strlen( msg ) );
 
   if ( n < strlen( msg ) )
