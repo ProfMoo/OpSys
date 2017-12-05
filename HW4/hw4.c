@@ -54,8 +54,12 @@ void* putSendAck(int newsd) {
 	return NULL;
 }
 
-void* put(int newsd, char* message, char* filename, char* bytes, int message_length) {
+void* put(int newsd, char* message, char* filenameP, char* bytes, int message_length) {
 	int bytesInt = atoi(bytes);
+
+	char filename[64];
+	strcpy(filename, "storage/");
+	strcat(filename, filenameP);
 
 	//def.txt has 1139 bytes
 	char buffer[bytesInt];
@@ -65,9 +69,13 @@ void* put(int newsd, char* message, char* filename, char* bytes, int message_len
 	//reading in large files from StackOverflow.com
 
 	//first write
-	int firstWrite = write(fd, message, message_length);
+	int firstWrite = write(fd, message, message_length-1);
 	//keep track of amount written
+	//printf("bytesInt: %d\n", bytesInt);
+	bytesInt -= 3;
 	bytesInt = bytesInt-firstWrite;
+	//printf("bytesInt2: %d\n", bytesInt);
+	fflush(NULL);
 	while (bytesInt > 0) {
 		int n = recv(newsd, buffer, bytesInt, 0);
 
@@ -78,7 +86,7 @@ void* put(int newsd, char* message, char* filename, char* bytes, int message_len
 
 	//end of StackOverflow.com code
 
-	printf("[child %lu] Stored file \"%s\" (%s bytes)\n", pthread_self(), filename, bytes);
+	printf("[child %lu] Stored file \"%s\" (%s bytes)\n", pthread_self(), filenameP, bytes);
   	fflush(NULL);
 	close(fd);
 
@@ -122,7 +130,6 @@ void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 	int lengthInt = (int)strtol(length, (char**)NULL, 10);
 
 	FILE *fileptr;
-	char *buffer;
 	long filelen;
 
 	fileptr = fopen(filename, "rb");	// Open the file in binary mode
@@ -141,48 +148,49 @@ void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 		return NULL;
 	}
 
-	rewind(fileptr);					// Jump back to the beginning of the file
+	rewind(fileptr);	// Jump back to the beginning of the file
 
 	//making the ACK in here
 	int intLength = strlen(length);
-	int intSent = 6 + intLength;
-	char* toSend = (char*)calloc(intSent, sizeof(char));
-	strcat(toSend, "ACK ");
-	strcat(toSend, length);
-	toSend[intSent-2] = '\n';
+	char toSend[5+intLength];
+	sprintf( toSend, "ACK %d\n", lengthInt);
+	int n = send( newsd, toSend, 5+intLength, 0 );
 
 	printf("[child %lu] Sent %s", pthread_self(), toSend);
 	fflush(NULL);
 	//done making ACK
 
-	buffer = (char *)malloc((lengthInt+1)*sizeof(char));
+	
+	char bufferGet[lengthInt+1];
 	
 	int fileFd = fileno(fileptr);
-	ssize_t numRead = pread(fileFd, buffer, lengthInt, byteOffsetInt);
-
+	//printf("byteOffsetInt: %d\n", byteOffsetInt);
+	//printf("lengthInt:  %d\n", lengthInt);
+	fflush(NULL);
+	ssize_t numRead = pread(fileFd, bufferGet, lengthInt, byteOffsetInt);
 	if (numRead < 0) {
 		perror("Error, file not read. pread() failed");
 		_exit(1);
 	}
-	
-	int totalLength = lengthInt+1+intSent;
-	char totalBuff[totalLength];
-	strcat(totalBuff, toSend);
-	strcat(totalBuff, buffer);
+	bufferGet[lengthInt] = '\0';
 
-	int n = send( newsd, totalBuff, totalLength-1, 0 );
+	n = send( newsd, bufferGet, lengthInt, 0 );
 
-	if ( n != totalLength-1 ) {
+	if ( n != lengthInt ) {
 		perror( "send() failed" );
 		_exit(1);
 	}
 
-	printf("[child %lu] Sent %s bytes of \"%s\" from offset %s\n", pthread_self(), length, filenameGet, byteOffset);
-	fflush(NULL);
+	if (lengthInt == 1) {
+		printf("[child %lu] Sent %s byte of \"%s\" from offset %s\n", pthread_self(), length, filenameGet, byteOffset);
+		fflush(NULL);
+	}
+	else {
+		printf("[child %lu] Sent %s bytes of \"%s\" from offset %s\n", pthread_self(), length, filenameGet, byteOffset);
+		fflush(NULL);
+	}
 
 	fclose(fileptr); // Close the file
-	free(buffer);
-	free(toSend);
 
 	return NULL;
 }
@@ -303,6 +311,8 @@ char* wordGet(int* i, char* message) {
 }
 
 void* handleMessage(char* message, int newsd, int message_length) {
+	//fix where ACK PRINTS
+	//IT NEEDS TO ACK EVEN IF IT CANT DO IT
 	int counter = 0;
 	if (message[0] == 'P') {
 		//PUT <filename> <bytes>\n<file-contents>
@@ -321,12 +331,14 @@ void* handleMessage(char* message, int newsd, int message_length) {
 		printf("[child %lu] Received PUT %s %s\n", pthread_self(), filenameput, bytes);
  		fflush(NULL);
 
- 		printf("filenameput: %s\n", filenameput);
- 		fflush(NULL);
- 		putErrorCheck(newsd, filenameput);
+ 		if (putErrorCheck(newsd, filenameput)) {
+ 			return NULL;
+ 		}
 
  		message_length -= counter;
 
+ 		counter++;
+ 		fflush(NULL);
  		pthread_mutex_lock(&directory);
 		put(newsd, &message[counter], filenameput, bytes, message_length);
 		pthread_mutex_unlock(&directory);
@@ -397,7 +409,6 @@ void* threadCall(void* arg) {
 		if ( n == -1 ) {
 			printf("[child %lu] Client disconnected\n", pthread_self());
 			fflush(NULL);
-			_exit(1);
 		}
 		else if ( n == 0 ) {
 			printf("[child %lu] Client disconnected\n", pthread_self());
