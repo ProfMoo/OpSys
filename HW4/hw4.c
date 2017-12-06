@@ -155,6 +155,9 @@ void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 	char toSend[5+intLength];
 	sprintf( toSend, "ACK %d\n", lengthInt);
 	int n = send( newsd, toSend, 5+intLength, 0 );
+	//printf("n: %d\n", n);
+	//printf("toSend: \"%s\"\n", toSend);
+	//fflush(NULL);
 
 	printf("[child %lu] Sent %s", pthread_self(), toSend);
 	fflush(NULL);
@@ -166,15 +169,20 @@ void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 	int fileFd = fileno(fileptr);
 	//printf("byteOffsetInt: %d\n", byteOffsetInt);
 	//printf("lengthInt:  %d\n", lengthInt);
-	fflush(NULL);
+	//fflush(NULL);
 	ssize_t numRead = pread(fileFd, bufferGet, lengthInt, byteOffsetInt);
 	if (numRead < 0) {
 		perror("Error, file not read. pread() failed");
 		_exit(1);
 	}
+	// printf("numRead: %lu\n", numRead);
+	// printf("bufferGet: \"%s\"\n", bufferGet);
+	// fflush(NULL);
 	bufferGet[lengthInt] = '\0';
 
 	n = send( newsd, bufferGet, lengthInt, 0 );
+	// printf("n2: %d\n", n);
+	// fflush(NULL);
 
 	if ( n != lengthInt ) {
 		perror( "send() failed" );
@@ -193,6 +201,10 @@ void* get(int newsd, char* filenameGet, char* byteOffset, char* length) {
 	fclose(fileptr); // Close the file
 
 	return NULL;
+}
+
+static int qsort_help( const void * a, const void * b ){
+    return strcmp(*(const char **) a, *(const char **) b);
 }
 
 void* list(int newsd) {
@@ -237,6 +249,10 @@ void* list(int newsd) {
 	    }
 	}
 	rewinddir(d);
+
+	//code found on StackOverflow.com
+	qsort( filesList, numFiles, sizeof( const char* ), qsort_help );
+	//end of StackOverflow.com code
 
 	char strNum[3];
 	sprintf(strNum, "%d ", numFiles);
@@ -331,14 +347,19 @@ void* handleMessage(char* message, int newsd, int message_length) {
 		printf("[child %lu] Received PUT %s %s\n", pthread_self(), filenameput, bytes);
  		fflush(NULL);
 
- 		if (putErrorCheck(newsd, filenameput)) {
- 			return NULL;
- 		}
 
  		message_length -= counter;
 
  		counter++;
- 		fflush(NULL);
+ 		pthread_mutex_lock(&directory);
+ 		if (putErrorCheck(newsd, filenameput)) {
+ 			pthread_mutex_unlock(&directory);
+ 			return NULL;
+ 		}
+ 		else {
+ 			pthread_mutex_unlock(&directory);
+ 		}
+
  		pthread_mutex_lock(&directory);
 		put(newsd, &message[counter], filenameput, bytes, message_length);
 		pthread_mutex_unlock(&directory);
@@ -422,7 +443,7 @@ void* threadCall(void* arg) {
 		}
 	}
 	while ( n > 0 );
-	close(newsd);
+	//close(newsd);
 
     return NULL;
 }
@@ -470,7 +491,7 @@ int startConnection(char* portString) {
 	}
 
 	printf("Started server\n");
-	printf("Listening for TCP connection on port: %d\n", port);
+	printf("Listening for TCP connections on port: %d\n", port);
 	fflush(NULL);
 	struct sockaddr_in client;
 	int fromlen = sizeof( client );
@@ -482,7 +503,7 @@ int startConnection(char* portString) {
 	while ( 1 ) {
 		int newsd = accept( sd, (struct sockaddr *)&client, (socklen_t *)&fromlen );
 
-		printf( "Rcvd incoming TCP connection from %s\n", inet_ntoa( (struct in_addr)client.sin_addr ) );
+		printf( "Rcvd incoming TCP connection from: %s\n", inet_ntoa( (struct in_addr)client.sin_addr ) );
 		fflush(NULL);
 
 		int rc = pthread_create( &tid, NULL, threadCall, &newsd);
