@@ -1,0 +1,123 @@
+[12/07/2017]
+
+Project 2 -- Submitty setup coming soon (by Saturday)
+
+Final Class -- 12/11 Security -- Quiz 9
+
+Final Exam -- Wed 12/20 11:30AM-2:30PM in DCC 337 and AE 214 (Comprehensive)
+
+Final Course Grades -- Rainbow Grades by Monday
+
+==============================================================================
+
+Filesystems and I/O
+
+-- Goal: data should be organized and available in some convenient and efficient manner
+
+-- a FILE is the basic building block
+
+-- a FILE is an abstraction that can represent user data, OS data, 
+	an executable, source code, a device, a directory/folder, etc.
+
+-- a FILE is simple a sequence of stream of bytes
+
+-- File attributes
+	-- Human-readable name (sometimes with a filename extension)
+	-- Type (e.g., regular file, directory, symbolic link, etc.)
+	-- Logical location(s) (i.e., within the filesystem hierarchy)
+		/cs/goldsd/public.html/docs/csci4210-f17/
+		/etc/abc.conf
+		/tmp/weofiwjojifwe.tmp
+	-- Physical location(s) (i.e., on disk)
+	-- Size (in bytes)
+	-- Protection/mode (e.g., rwx permissions, 0664)
+	-- Timestamps (e.g., creation date, last-modified,
+		last-accessed date, etc.)
+	-- Number of hard links
+	-- etc.
+
+-- If you make a hard link, then ls -l wont tell you which one is the link and which one isn't.
+	-- hard link, it almost doesn't matter which one is the original.
+
+-- If you make a symbolic link, then there will be a problem if you delete an original.
+	-- sym link, ls -l tells you where your file points.
+	-- if you delete first file, then the sym link file is still there, but it is empty
+
+-- An ACCESS METHOD describes the manner/mechanism by which a process
+	accesses data within a file
+	-- sequential access (open, read, write, close)
+	-- random access (open, read, write, fseek/lseek, close)
+
+==========================================================================================
+
+Storage Schemes
+-- Storage schemes on disk are transparent to users
+-- Traditionally involves cylinders, tracks, sectors, bytes
+
+Contiguous Disk Space Allocation Scheme
+-- files are allocated to contiguous blocks of disk space
+
+e.g., four files on disk
+
+	AAAABBCCCCDD................................
+
+	file B outgrows (e.g., doubles) its space, it must be reallocated:
+	AAAA..CCCCDDBBBB............................
+
+	file D outgrows (e.g., doubles) its space, it must be reallocated:
+	AAAA..CCCC..BBBBDDDDDD......................
+
+	eventually, we need to perform defragmentation
+	AAAACCCCBBBBDDDDDD..........................
+		<<<<<<<<<<<<<<<<<<<
+
+-- has a clear drawback. you need to move files and other things need to wait
+
+Clustered Disk Space Allocation Scheme
+-- files are allocated to clusters of contiguous blocks of disk space
+
+e.g., four files on disk
+
+	AAAABBCCCCDD................................
+
+	file B outgrows (e.g., doubles) its space, we add a new cluster:
+	AAAABBCCCCDDBB..............................
+		^^		^^
+
+	file D outgrows (e.g., triples) its space, we add a new cluster:
+	AAAABBCCCCDDBBDDDD..........................
+			  ^^  ^^^^
+
+	file B is deleted:
+	AAAA..CCCCDD..DDDD..........................
+
+-- key advantage is that we do not require defragmentation
+-- disadvantages
+	-- more bookkeeping is required
+	-- file access might cross cluster boundaries, causing slower access times.
+		like when you need to access B, you could need to jump across the disk
+
+===========================================================================================
+
+In Linux, file information is stored in an index node (inode),
+which contains various file attributes (listed above), as well as:
+	-- number of blocks (clusters) allocated to a file
+	(where a BLOCK is a fixed size of data, e.g., 8192 bytes)
+	-- pointers to the first 12-15 (typically 15) direct blocks
+	-- pointers to three additional blocks, which also then
+	points to additional mappings and blocks
+
+e.g., given a block size of Q, what is the maximum file size?
+
+	Q = 8192 bytes
+	(and assume 1024 is the overall maximum number of pointers possible in an inode)
+
+	direct blocks: 15 x Q = 15 x 8192 = 122,880 bytes
+
+	single indirect: 122,880 + (1024 x 8192) = 8,511,488 bytes
+
+	double indirect: 8,511,488 + (1024^2 x 8192) = 8,598,446,080 bytes
+
+	triple indirect: 8,598,446,080 + (1024^3 x 8192) = 8,804,691,468,288 bytes
+
+TO DO: how many inodes do we need for a given file size?
