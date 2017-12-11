@@ -1,0 +1,48 @@
+[12/11/17]
+
+Security 
+-- Complete understanding of system so you know its weaknesses and holes
+
+Pwning
+-- Using bugs and flaws in an executable to gain control over a process and run a system
+-- Need to know the compiler, operating system, and architecture
+
+C
+-- Weird and quirky
+-- Keeps security industry in business because
+	-- compiles right to machine code
+	-- code has full control over memory
+
+Endian
+-- most x86 machines are little endian. this means the order of the bytes are reversed
+-- 0x01020304 --> 0x04,0x03,0x02,0x01
+-- important for knowing how the values are stored
+
+How code breaks
+-- Buffer overflow (entering in a ton of bytes)
+	-- gets() is a bad function, goes on forever
+	-- strcpy, strcat, scanf also have thsi problem
+	-- buffer overflow basically happens when you try to write too much on
+		a fixed size of the stack
+	-- we can out in certain values by knowing where the values are stored in memory
+		-- we can enter our name as something specific to overflow into money location
+	-- Control what you return (by overwriting the return value space in memory)
+		-- by manipulating what value the machine points to when it returns
+
+-- Keep stdin open and be able to enter more input
+
+-- format string bug;
+	-- printf() can get confused and print out stuff it isn't supposed to.
+		it just goes into memory and outputs.
+	-- printf() can also use %n to write to stack. so now we can use this to write
+		stuff to memory
+
+-- Integer overflow
+	-- if you're trying to allocate memory, and you're given a large number, things
+		could go wrong with memory
+	-- C can be a problem because the memory allocs don't always function as
+		intended
+
+-- Time of check vs. Time of use
+	-- run a check, make sure its safe. then, before it does the desired thing, change
+		some values
